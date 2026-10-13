@@ -2,11 +2,11 @@
  * The video: an opening card, one scene per change, a closing card.
  *
  * The scenes are made like one screen recording of the page, with nothing of a browser
- * around it: rounded corners, a soft shadow, a large pointer. The page is scrolled to the
- * place, the pointer goes to the change and the camera follows it, on a spring; there the
- * page changes from before to after, and a frame is drawn around what differs. The
- * recording stays through all scenes and the pointer goes on from where it was. Above it a
- * line says which scene this is, under it the sentence runs as the subtitle.
+ * around it and no pointer on it: rounded corners and a soft shadow. The page is scrolled
+ * to the place, the camera goes to the change on a spring, there the page changes from
+ * before to after, and a frame is drawn around what differs. The recording stays through
+ * all scenes. Above it a line says which scene this is, under it the sentence runs as the
+ * subtitle.
  *
  * Nothing in it is a brand.
  */
@@ -181,8 +181,8 @@ export function closeUp(rect, width, height) {
 
 /**
  * Everything about a scene that does not move: where the page is scrolled to, the frame
- * around the change, how close the camera goes, and where the pointer ends. The next scene
- * reads the last of these, so that the pointer goes on from where it was.
+ * around the change and how close the camera goes. The next scene reads where the page
+ * was, to show it for a moment while its own page comes.
  */
 export function plan(scene) {
   const scale = WINDOW_W / scene.pageWidth;
@@ -214,84 +214,33 @@ export function plan(scene) {
   const [x, w] = grow(box.x, box.w, 72, scene.pageWidth);
   const [y, h] = grow(Math.max(0, box.y), box.h, 48, VIEW_H);
   const rect = { left: x * scale, top: y * scale, width: w * scale, height: h * scale };
-  // The pointer ends at the corner of the change, where it does not cover it
-  const corner = { x: Math.min(rect.left + rect.width + 12, WINDOW_W - 40), y: Math.min(rect.top + rect.height + 10, windowH - 48) };
-  return { scale, windowH, hasBefore, hasAfter, both: hasBefore && hasAfter, onAfter, wanted, tops, rect, corner, close: closeUp(rect, WINDOW_W, windowH) };
+  return { scale, windowH, hasBefore, hasAfter, both: hasBefore && hasAfter, onAfter, wanted, tops, rect, close: closeUp(rect, WINDOW_W, windowH) };
 }
 
-/** The pointer of a screen recording, its tip at `x`, `y`; `pressed` from 0 to 1 is a click. */
-const Pointer = ({ x, y, pressed, opacity }) => (
-  <div style={{ position: "absolute", left: x, top: y, opacity, pointerEvents: "none" }}>
-    <span
-      style={{
-        position: "absolute",
-        left: -30,
-        top: -30,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        background: "rgba(255,255,255,0.35)",
-        border: "1px solid rgba(0,0,0,0.15)",
-        opacity: pressed > 0 && pressed < 1 ? 1 - pressed : 0,
-        transform: `scale(${0.25 + pressed * 0.75})`,
-      }}
-    />
-    <svg
-      width="42"
-      height="54"
-      viewBox="0 0 28 36"
-      style={{ position: "absolute", left: -4, top: -3, transform: `scale(${1 - 0.14 * Math.sin(Math.PI * pressed)})`, transformOrigin: "4px 3px", filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.35))" }}
-    >
-      <path d="M3 2 L3 27 L9.5 21 L14 32 L18.5 30 L14 19.5 L23 19.5 Z" fill="#111113" stroke={WHITE} strokeWidth="2" strokeLinejoin="round" />
-    </svg>
-  </div>
-);
-
-// How a hand moves a pointer: it starts and stops gently, fastest in the middle
-const reach = (t) => t * t * t * (10 - 15 * t + 6 * t * t);
-
-/** A point between two, `share` of the way, on a slight arc; `bend` says to which side. */
-const between = (from, to, share, bend = 1) => {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const lift = Math.sin(Math.PI * share) * Math.min(48, distance * 0.1) * bend;
-  return { x: from.x + dx * share + (dy / distance) * lift, y: from.y + dy * share - (dx / distance) * lift };
-};
-
-/** How many frames a hand takes for a way: longer for a longer one, never abrupt. */
-const takes = (from, to) => Math.round(16 + Math.hypot(to.x - from.x, to.y - from.y) / 34);
-
-const Scene = ({ scene, index, count, texts, versions, previous }) => {
+const Scene = ({ scene, index, count, texts, previous }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const length = sceneFrames(scene);
-  const { scale, windowH, hasBefore, hasAfter, both, onAfter, wanted, tops, rect, corner, close } = plan(scene);
+  const { scale, windowH, hasBefore, hasAfter, both, onAfter, wanted, tops, rect, close } = plan(scene);
 
   // As in a recording, the page is scrolled to the place: two pushes of the wheel, each
   // running out, from further up and not from so far that it races
   const flick = (from, to) => interpolate(frame, [from, to], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
   const lead = Math.min(wanted, 520) * (1 - 0.62 * flick(10, 30) - 0.38 * flick(27, 52));
 
-  // The pointer goes on from where the scene before left it, to the change. Once it is
-  // there and the camera with it, the page changes from before to after in place.
-  const from = previous ? plan(previous).corner : { x: WINDOW_W * 0.56, y: windowH * 0.68 };
+  // Once the page has come to rest the camera goes to the change; there the page changes
+  // from before to after in place
   const depart = 46;
-  const arrive = depart + takes(from, corner);
-  const change = arrive + 16;
+  const change = depart + 40;
   const after = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [change, change + 8], [0, 1], clamp);
   const side = after >= 0.5 ? "after" : "before";
 
-  // The camera follows the pointer to a small change, on a spring, and comes back before
-  // the scene ends
+  // The camera goes to a small change on a spring, and comes back before the scene ends
   const settle = { damping: 200, mass: 1, stiffness: 90 };
   const near =
     spring({ frame: frame - (depart + 4), fps, config: settle }) -
     spring({ frame: frame - (length - 44), fps, config: settle });
   const zoom = 1 + (close.scale - 1) * near;
-  // Where a point of the window is on screen once the camera has moved
-  const seen = (point) => ({ x: (point.x - close.cx) * zoom + close.cx + close.x * near, y: (point.y - close.cy) * zoom + close.cy + close.y * near });
-  const pointer = between(from, seen(corner), reach(interpolate(frame, [depart, arrive], [0, 1], clamp)), index % 2 ? -1 : 1);
   const drawn = interpolate(frame, [change + (both ? 6 : -12), change + (both ? 30 : 12)], [0, 1], { ...clamp, easing: reveal });
 
   const page = (which, at) => (
@@ -385,9 +334,6 @@ const Scene = ({ scene, index, count, texts, versions, previous }) => {
               />
             </svg>
           </div>
-        </div>
-        <div style={{ position: "absolute", left: 0, top: 0 }}>
-          <Pointer x={pointer.x} y={pointer.y} pressed={0} opacity={first ? interpolate(frame, [18, 30], [0, 1], clamp) : 1} />
         </div>
       </div>
 
@@ -495,7 +441,7 @@ const End = ({ summary, texts, scenes }) => {
   );
 };
 
-export const Reel = ({ title, summary, scenes, language, facts = [], versions }) => {
+export const Reel = ({ title, summary, scenes, language, facts = [] }) => {
   useFonts();
   const frame = useCurrentFrame();
   const texts = textsFor(language);
@@ -516,7 +462,7 @@ export const Reel = ({ title, summary, scenes, language, facts = [], versions })
       )}
       {scenes.map((scene, index) => (
         <Sequence key={index} from={starts[index]} durationInFrames={sceneFrames(scene)}>
-          <Scene scene={scene} index={index} count={scenes.length} texts={texts} versions={versions} previous={scenes[index - 1]} />
+          <Scene scene={scene} index={index} count={scenes.length} texts={texts} previous={scenes[index - 1]} />
         </Sequence>
       ))}
       <Sequence from={at} durationInFrames={END}>

@@ -333,7 +333,6 @@ async function main() {
         [texts.before, short(options.base ?? options.before)],
         [texts.after, short(options.base ? options.head : options.after)],
       ],
-      versions: { before: short(options.base ?? options.before), after: short(options.base ? options.head : options.after) },
       scenes,
     };
     writeFileSync(join(options.out, "reel.json"), JSON.stringify(props, null, 2) + "\n");

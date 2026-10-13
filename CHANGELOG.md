@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-- The scenes are made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, a large pointer goes to the change and the camera follows it on a spring, and there the page changes from before to after. The recording stays through all scenes; the sentence runs under it as the subtitle.
+- The scenes are made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, the camera goes to the change on a spring, and there the page changes from before to after. The recording stays through all scenes; the sentence runs under it as the subtitle.
 - The pages are shown with twice the pixels, so they stay sharp when the camera moves closer.
 
 - The spoken sentence follows the voice word by word.
