@@ -31,12 +31,12 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="A video made by changereel: for each of five changes the page before, a wipe to the page after, a frame around what differs and a sentence that says what changed" width="820">
+  <img src="docs/assets/demo.gif" alt="A video made by changereel: for each of five changes the page scrolls to the place, the camera moves closer, the page changes from before to after, a frame is drawn around what differs and a sentence says what changed" width="820">
 </p>
 
-<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.4.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
+<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.5.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
-A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video: the page before, a wipe to the page after, and a frame around what is different.
+A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, the page changes from before to after, and a frame is drawn around what is different.
 
 ```console
 changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}"

@@ -4,13 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-- The scenes are made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, the camera goes to the change on a spring, and there the page changes from before to after. The recording stays through all scenes; the sentence runs under it as the subtitle.
-- The pages are shown with twice the pixels, so they stay sharp when the camera moves closer.
+## [0.5.0] - 2026-10-13
 
+- The video is made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, the camera goes to the change on a spring, and there the page changes from before to after. The recording stays through all scenes. Above it a line says which scene this is, under it the sentence runs as the subtitle.
 - The spoken sentence follows the voice word by word.
-
-- The video has a new look: a column that says what the change is next to a window that shows the page at its true size, an opening card with the facts of the run, a closing card that lists the changes, and a row of cells that counts the scenes.
+- The pages are shown with twice the pixels, so they stay sharp when the camera moves closer.
 - The frame around changed pixels grows to the words they belong to, so a changed digit no longer cuts a price in two.
+- An opening card with the facts of the run and a closing card that lists the changes.
 - `reel.json` next to the video holds what it was rendered from.
 
 ## [0.4.0] - 2026-10-13
@@ -38,7 +38,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/derblub/changereel/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/derblub/changereel/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/derblub/changereel/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/derblub/changereel/compare/v0.1.0...v0.2.0
