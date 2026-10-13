@@ -192,6 +192,8 @@ export async function compare(options, log = console.log) {
                 afterY: change.afterY + is.y,
                 box: change.box && { ...change.box, x: change.box.x + is.x },
                 span: change.span && { ...change.span, x: change.span.x + is.x },
+              ...(change.boxBefore ? { boxBefore: { ...change.boxBefore, x: change.boxBefore.x + was.x } } : {}),
+              ...(change.spanBefore ? { spanBefore: { ...change.spanBefore, x: change.spanBefore.x + was.x } } : {}),
                 view,
               });
             }

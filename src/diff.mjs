@@ -146,7 +146,7 @@ export function changedBox(before, after, band) {
 /**
  * A box around changed pixels, widened to what they belong to. Of a price that went from
  * 599 to 549 one digit differs; a frame around that digit cuts the number in two. The box
- * grows to each side until it meets `gap` columns or rows in which nothing is drawn, so it
+ * first loses what is empty at its edges on this picture, then grows to each side until it meets `gap` columns or rows in which nothing is drawn, so it
  * holds the words around the digit, and stops at the space around them. A side that finds
  * no such space within `reach` pixels stays where it was: the change sits in a picture or
  * on a pattern, and has no edge to grow to.
@@ -184,7 +184,24 @@ export function snapBox(png, band, box, { gap = 10, reach = 240 } = {}) {
     }
     return edge;
   };
-  // Twice: what is found to the sides changes which rows count, and the other way round
+  // First inwards: the box holds what differs on either side, and on this side less may be
+  // drawn in it (the shorter label of a button). Lines that are empty come off the edges:
+  // flat, and in the colour of what lies outside the box on that side. A flat line in
+  // another colour is the edge of something, such as a button, and stays.
+  const whole = { left, right, top, bottom };
+  const outside = {
+    left: pixel(Math.max(0, left - 1), top),
+    right: pixel(Math.min(png.width - 1, right + 1), top),
+    top: pixel(left, Math.max(0, top - 1)),
+    bottom: pixel(left, Math.min(png.height - 1, bottom + 1)),
+  };
+  while (left < right && flatColumn(left) && pixel(left, top) === outside.left) left++;
+  while (right > left && flatColumn(right) && pixel(right, top) === outside.right) right--;
+  while (top < bottom && flatRow(top) && pixel(left, top) === outside.top) top++;
+  while (bottom > top && flatRow(bottom) && pixel(left, bottom) === outside.bottom) bottom--;
+  if (left === right || top === bottom) ({ left, right, top, bottom } = whole);
+  // Then outwards. Twice: what is found to the sides changes which rows count, and the
+  // other way round
   for (let pass = 0; pass < 2; pass++) {
     left = walk(left, -1, 0, flatColumn);
     right = walk(right, 1, png.width - 1, flatColumn);
@@ -192,6 +209,20 @@ export function snapBox(png, band, box, { gap = 10, reach = 240 } = {}) {
     bottom = walk(bottom, 1, limit.bottom, flatRow);
   }
   return { ...box, x: left, y: top - band.afterY, width: right - left + 1, height: bottom - top + 1 };
+}
+
+/** Whether a rectangle of a picture is one flat colour: nothing is drawn there. */
+export function isFlat(png, x, y, width, height) {
+  const right = Math.min(png.width, x + width);
+  const bottom = Math.min(png.height, y + height);
+  if (x >= right || y >= bottom) return true;
+  const first = png.data.readUInt32LE((y * png.width + x) * 4);
+  for (let row = y; row < bottom; row++) {
+    for (let col = x; col < right; col++) {
+      if (png.data.readUInt32LE((row * png.width + col) * 4) !== first) return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -224,7 +255,7 @@ export function drawnSpan(png, y, height) {
  * Left out are added and removed bands lower than `minHeight` rows, and bands of unchanged
  * height in which fewer than `minPixels` pixels differ.
  */
-export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, minPixels = 40 } = {}) {
+export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, minPixels = 40, snap = true } = {}) {
   const before = PNG.sync.read(beforeBuffer);
   const after = PNG.sync.read(afterBuffer);
   if (before.width !== after.width) {
@@ -248,12 +279,35 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
       const grew = Math.abs(band.afterH - band.beforeH) > Math.max(16, Math.min(band.beforeH, band.afterH) / 4);
       const whole = grew || !box;
       const taller = band.afterH >= band.beforeH;
-      changes.push({
-        ...band,
-        type: "changed",
-        box: whole ? null : snapBox(after, band, box),
-        ...(whole ? { span: taller ? drawnSpan(after, band.afterY, band.afterH) : drawnSpan(before, band.beforeY, band.beforeH) } : {}),
-      });
+      if (whole) {
+        changes.push({
+          ...band,
+          type: "changed",
+          box: null,
+          span: taller ? drawnSpan(after, band.afterY, band.afterH) : drawnSpan(before, band.beforeY, band.beforeH),
+          spanBefore: drawnSpan(before, band.beforeY, band.beforeH),
+        });
+      } else {
+        // The same place on both sides, each widened on its own picture: a button that got
+        // a longer label is wider after than before. A side on which the place is empty
+        // (a link that is new, a badge that is gone) takes the box of the other.
+        const blank = isFlat(before, box.x, band.beforeY + box.y, box.width, box.height)
+          ? "before"
+          : isFlat(after, box.x, band.afterY + box.y, box.width, box.height)
+            ? "after"
+            : undefined;
+        // `snap` off keeps the box of the differing pixels as it is: what has to be painted
+        // over as noise is all of it, on either side
+        const now = snap ? snapBox(after, band, box) : box;
+        const was = snap ? snapBox(before, { afterY: band.beforeY, afterH: band.beforeH }, box) : box;
+        changes.push({
+          ...band,
+          type: "changed",
+          box: blank === "after" ? { ...was, pixels: box.pixels } : now,
+          boxBefore: blank === "before" ? now : was,
+          ...(blank ? { blank } : {}),
+        });
+      }
     } else if (Math.max(was.height, is.height) >= minHeight) {
       changes.push({
         type: is.height ? "added" : "removed",
@@ -283,7 +337,7 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
  * blank stretch of another height is spacing, not a change.
  */
 export function noiseBoxes(firstBuffer, secondBuffer, pad = 8) {
-  const { width, beforeHeight, changes } = diffPages(firstBuffer, secondBuffer, { minPixels: 1, minHeight: 1 });
+  const { width, beforeHeight, changes } = diffPages(firstBuffer, secondBuffer, { minPixels: 1, minHeight: 1, snap: false });
   const boxes = [];
   for (const change of changes) {
     if (!change.beforeH) continue; // only on the second visit: nothing to paint in the first

@@ -4,8 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-- The page before stands still for a good second once the camera is there, the place marked with a dashed line, before it changes to the page after. A sign in the corner of the recording says which side it is.
-
+- The page before stands still for a good second once the camera is there, before it changes to the page after. A sign in the corner of the recording says which side it is.
+- The place is marked on both sides, each measured on its own page, and the mark moves and grows from the one into the other: dashed around what was, hatched where there is nothing yet or nothing any more, solid in the accent around what is now. The page around it is dimmed a little, and what is new lights up as it comes.
 - A page on which a change is found is visited again on both sides before the change counts (`--confirm`, default 2). A random part that looked the same twice by chance no longer shows as a change.
 - The frame around a section that came, went or grew goes around what is drawn in it, not from edge to edge of the page.
 

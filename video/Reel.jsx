@@ -4,8 +4,8 @@
  * The scenes are made like one screen recording of the page, with nothing of a browser
  * around it and no pointer on it: rounded corners and a soft shadow. The page is scrolled
  * to the place and the camera goes to the change on a spring. There the page before stands
- * still, the place marked with a dashed line, then changes to the page after, and a frame
- * is drawn around what differs. A sign in the corner says which side it is. The recording stays through
+ * still with the place marked, then changes to the page after, and the mark moves and grows
+ * into the place there. A sign in the corner says which side it is. The recording stays through
  * all scenes. Above it a line says which scene this is, under it the sentence runs as the
  * subtitle.
  *
@@ -200,30 +200,44 @@ export function plan(scene) {
     before: Math.min(wanted, Math.max(0, scene.beforeHeight - VIEW_H)),
     after: Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H)),
   };
-  // The frame goes around the changed pixels, or around what is drawn in a section that
-  // came or went
-  const top = onAfter ? tops.after : tops.before;
-  const band = onAfter ? { y: scene.afterY - top, h: scene.afterH } : { y: scene.beforeY - top, h: scene.beforeH };
-  const box = scene.box && onAfter
-    ? { x: scene.box.x, y: scene.afterY + scene.box.y - top, w: scene.box.width, h: scene.box.height }
-    : { x: scene.span?.x ?? 0, y: band.y, w: scene.span?.width ?? scene.pageWidth, h: band.h };
-  // Room around the pixels, and a least size: a changed digit is a few pixels wide
-  const grow = (start, size, least, limit) => {
+  // The place on each side, in the window: around the changed pixels, or around what is
+  // drawn in a section that came or went. Each side is measured on its own page, so the
+  // mark sits right on the page before as well. Where a side has nothing (a section that
+  // is new has no rows before), the place is a slot: a low strip where the rows will be.
+  const room = (start, size, least, limit) => {
     const padded = Math.max(size + 16, least);
     const from = Math.max(0, Math.min(start - (padded - size) / 2, limit - padded));
     return [from, Math.min(padded, limit - from)];
   };
-  const [x, w] = grow(box.x, box.w, 72, scene.pageWidth);
-  const [y, h] = grow(Math.max(0, box.y), box.h, 48, VIEW_H);
-  const rect = { left: x * scale, top: y * scale, width: w * scale, height: h * scale };
-  return { scale, windowH, hasBefore, hasAfter, both: hasBefore && hasAfter, onAfter, wanted, tops, rect, close: closeUp(rect, WINDOW_W, windowH) };
+  const place = (which, box, span) => {
+    const bandY = scene[`${which}Y`] - tops[which];
+    const bandH = scene[`${which}H`];
+    const at = box
+      ? { x: box.x, y: bandY + box.y, w: box.width, h: box.height }
+      : { x: span?.x ?? 0, y: bandY, w: span?.width ?? scene.pageWidth, h: bandH };
+    const [x, w] = room(at.x, at.w, 72, scene.pageWidth);
+    const [y, h] = at.h ? room(Math.max(0, at.y), at.h, 48, VIEW_H) : [Math.max(0, Math.min(at.y - 6, VIEW_H - 12)), 12];
+    return { left: x * scale, top: y * scale, width: w * scale, height: h * scale };
+  };
+  const rects = {
+    before: place("before", scene.boxBefore ?? (scene.box && scene.beforeH ? scene.box : null), scene.spanBefore ?? scene.span),
+    after: place("after", scene.afterH ? scene.box : null, scene.span),
+  };
+  // A side is empty when it has no rows there, or nothing drawn in them
+  const empty = {
+    before: !scene.beforeH || scene.blank === "before",
+    after: !scene.afterH || scene.blank === "after",
+  };
+  // The camera goes to the side that has the change, the larger of the two
+  const rect = onAfter ? rects.after : rects.before;
+  return { scale, windowH, hasBefore, hasAfter, both: hasBefore && hasAfter, onAfter, wanted, tops, rects, empty, close: closeUp(rect, WINDOW_W, windowH) };
 }
 
 const Scene = ({ scene, index, count, texts, previous }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const length = sceneFrames(scene);
-  const { scale, windowH, hasBefore, hasAfter, both, onAfter, wanted, tops, rect, close } = plan(scene);
+  const { scale, windowH, hasBefore, hasAfter, both, wanted, tops, rects, empty, close } = plan(scene);
 
   // As in a recording, the page is scrolled to the place: two pushes of the wheel, each
   // running out, from further up and not from so far that it races
@@ -245,10 +259,21 @@ const Scene = ({ scene, index, count, texts, previous }) => {
     spring({ frame: frame - (depart + 4), fps, config: settle }) -
     spring({ frame: frame - (length - 44), fps, config: settle });
   const zoom = 1 + (close.scale - 1) * near;
-  // On the page before, and on a part that is gone, the line is dashed: here it was. On the
-  // page after it is drawn solid, from its top left corner.
-  const dashed = interpolate(frame, [marked, marked + 12], [0, 1], clamp) * (onAfter ? 1 - after : 1);
-  const drawn = onAfter ? interpolate(frame, [change + (both ? 4 : 0), change + (both ? 28 : 24)], [0, 1], { ...clamp, easing: reveal }) : 0;
+  // The mark: it shows on the page before, and when the page changes it moves and grows
+  // into the place on the page after. How it looks says what the place is: a dashed line
+  // around what was, hatched where there is nothing, a solid line in the accent around what
+  // is now. Around it the page is dimmed a little, so the eye goes to the place at once.
+  const shown = interpolate(frame, [marked, marked + 12], [0, 1], clamp) - interpolate(frame, [length - 40, length - 24], [0, 1], clamp);
+  const morph = both ? interpolate(frame, [change, change + 14], [0, 1], { ...clamp, easing: reveal }) : hasAfter ? 1 : 0;
+  const mix = (name) => rects.before[name] + (rects.after[name] - rects.before[name]) * morph;
+  const mark = { left: mix("left"), top: mix("top") + lead * scale, width: mix("width"), height: mix("height") };
+  const looks = {
+    was: empty.before ? 0 : 1 - morph,
+    slot: (empty.before ? 1 - morph : 0) + (empty.after ? morph : 0),
+    now: empty.after ? 0 : morph,
+  };
+  // What is new lights up for a moment as it comes
+  const flash = empty.after ? 0 : interpolate(frame, [change, change + 8, change + 36], [0, 0.26, 0], clamp);
 
   const page = (which, at) => (
     <Img src={staticFile(scene[which])} style={{ position: "absolute", left: 0, top: -at * scale, width: WINDOW_W }} />
@@ -311,10 +336,29 @@ const Scene = ({ scene, index, count, texts, previous }) => {
                 </div>
               )}
             </div>
-            <svg style={{ position: "absolute", left: rect.left, top: rect.top + lead * scale, overflow: "visible" }} width={rect.width} height={rect.height}>
-              <rect x={0} y={0} rx={6 / zoom} width={rect.width} height={rect.height} fill="none" stroke="#85858f" strokeWidth={3 / zoom} strokeDasharray={`${10 / zoom} ${8 / zoom}`} opacity={dashed} />
-              <rect x={0} y={0} rx={6 / zoom} width={rect.width} height={rect.height} fill="none" stroke={TEAL} strokeWidth={3 / zoom} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - drawn} opacity={drawn > 0 ? 1 : 0} />
-            </svg>
+            <div
+              style={{
+                position: "absolute",
+                ...mark,
+                borderRadius: 6 / zoom,
+                opacity: shown,
+                boxShadow: "0 0 0 4000px rgba(0,0,0,0.26)",
+              }}
+            >
+              {[
+                ["was", { border: `${3 / zoom}px dashed #85858f` }],
+                [
+                  "slot",
+                  {
+                    border: `${3 / zoom}px dashed #85858f`,
+                    background: "repeating-linear-gradient(135deg, rgba(133,133,143,0.34) 0 2px, rgba(133,133,143,0.08) 2px 9px)",
+                  },
+                ],
+                ["now", { border: `${3 / zoom}px solid ${TEAL}`, background: `rgba(45,212,191,${flash})` }],
+              ].map(([name, look]) => (
+                <span key={name} style={{ position: "absolute", inset: 0, boxSizing: "border-box", borderRadius: 6 / zoom, opacity: looks[name], ...look }} />
+              ))}
+            </div>
           </div>
           {/* Which side this is, on the recording itself, where one looks */}
           <span
