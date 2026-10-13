@@ -77,6 +77,14 @@ describe("diff", () => {
     assert.equal(diffPages(was, is, { minPixels: 10 }).changes.length, 1);
   });
 
+  test("a band that grew a lot is shown whole, not by the box of its first rows", () => {
+    const was = page([20], [10, RED], [20], [30, BLUE]);
+    const is = page([20], [60, GREEN], [20], [30, BLUE]);
+    const { changes } = diffPages(was, is, { gap: 0 });
+    assert.equal(changes.length, 1);
+    assert.deepEqual([changes[0].type, changes[0].beforeH, changes[0].afterH, changes[0].box], ["changed", 10, 60, null]);
+  });
+
   test("more or less blank space is not a change", () => {
     const was = page([20], [30, RED], [20], [30, BLUE]);
     const is = page([20], [30, RED], [60], [30, BLUE]);

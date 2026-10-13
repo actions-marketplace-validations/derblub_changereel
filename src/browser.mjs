@@ -123,7 +123,7 @@ export async function openBrowser({ wait = 500 } = {}) {
     sessionId,
   );
 
-  async function capture(url, { width = 1280, height = 800 } = {}) {
+  async function capture(url, { width = 1280, height = 800, ignore = [] } = {}) {
     await cdp.send(
       "Emulation.setDeviceMetricsOverride",
       { width, height, deviceScaleFactor: 1, mobile: false },
@@ -142,6 +142,15 @@ export async function openBrowser({ wait = 500 } = {}) {
       off();
     }
     if (status >= 400) throw new Error(`HTTP ${status}`);
+    // A selector the browser cannot read would silently hide nothing
+    for (const selector of ignore) {
+      const { exceptionDetails } = await cdp.send(
+        "Runtime.evaluate",
+        { expression: `document.querySelector(${JSON.stringify(selector)})` },
+        sessionId,
+      );
+      if (exceptionDetails) throw new Error(`--ignore: "${selector}" is not a selector`);
+    }
     // Fonts in, client rendering done, then everything that still moves is stopped at its end
     await cdp.send(
       "Runtime.evaluate",
@@ -166,7 +175,9 @@ export async function openBrowser({ wait = 500 } = {}) {
           const style = document.createElement("style");
           // Frames hold what the page does not own (a captcha, a map, a video player) and
           // load in another state on every visit: they keep their place, but are not drawn
-          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; } iframe { visibility: hidden !important; }";
+          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; } iframe { visibility: hidden !important; }" + ${JSON.stringify(
+            ignore.length ? ` ${ignore.join(", ")} { visibility: hidden !important; }` : "",
+          )};
           document.head.append(style);
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         })()`,
@@ -271,6 +282,12 @@ export async function openBrowser({ wait = 500 } = {}) {
     return { page, layers };
   }
 
+  /** Runs an expression in the page that was captured last. For looking into a finding. */
+  async function evaluate(expression) {
+    const { result } = await cdp.send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sessionId);
+    return result.value;
+  }
+
   async function close() {
     cdp.close();
     const exited = new Promise((ok) => chrome.once("exit", ok));
@@ -287,5 +304,5 @@ export async function openBrowser({ wait = 500 } = {}) {
     }
   }
 
-  return { capture, close };
+  return { capture, evaluate, close };
 }

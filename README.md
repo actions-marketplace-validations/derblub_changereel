@@ -51,6 +51,8 @@ A real page is not the same picture on every visit. Compared with itself, the si
 
 The price is that a change that lies mostly inside or right next to an unstable part is not seen. `--passes` and `--noise-margin` move the line between a false alarm and a missed change.
 
+What you know to be random, name with `--ignore`. On the site this was tried on, two selectors (a testimonial picked at random, a logo whose gradient starts at a random point) took the comparison of a version with itself from 6 changes to none, and the comparison of two real versions to 14 changes, each of them one the commit had made.
+
 ## Usage
 
 Both versions of the site have to be running: the live site and a local build, or two builds on two ports.
@@ -60,6 +62,7 @@ Both versions of the site have to be running: the live site and a local build, o
 | `--before`, `--after` | | Addresses of the two running sites. Required. |
 | `--routes` | | Paths to compare, separated by spaces. Empty reads them from the sitemaps of both sites. |
 | `--sitemap` | | URL or file of one sitemap to read the routes from instead. |
+| `--ignore` | | CSS selectors, separated by commas, of parts to leave out on both sides: a random testimonial, an animated logo. They keep their place and are not drawn. |
 | `--out` | `out` | Directory for the screenshots, `changes.json` and `changereel.mp4`. |
 | `--title` | `What changed` | Title on the first card. |
 | `--width` | `1280` | Width of the browser window. |

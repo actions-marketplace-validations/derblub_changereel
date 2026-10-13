@@ -167,7 +167,10 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
       // A handful of pixels in a band of the same height: a hairline that rendered one
       // shade off, not something to show. A changed digit has more.
       if (box && box.pixels < minPixels && band.beforeH === band.afterH) continue;
-      changes.push({ ...band, type: "changed", box });
+      // The box is measured over the rows both sides have. Where one side is much taller,
+      // most of the change lies below them, and the band says more than the box.
+      const grew = Math.abs(band.afterH - band.beforeH) > Math.max(16, Math.min(band.beforeH, band.afterH) / 4);
+      changes.push({ ...band, type: "changed", box: grew ? null : box });
     } else if (Math.max(was.height, is.height) >= minHeight) {
       changes.push({
         type: is.height ? "added" : "removed",

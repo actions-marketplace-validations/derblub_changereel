@@ -41,6 +41,7 @@ export function parseArgs(argv) {
     after: site("after"),
     routes: (opt("routes") || "").split(/[\s,]+/).filter(Boolean),
     sitemap: opt("sitemap"),
+    ignore: (opt("ignore") || "").split(",").map((selector) => selector.trim()).filter(Boolean),
     out: resolve(opt("out") || "out"),
     title: opt("title") || "What changed",
     width: number("width", 1280),
@@ -61,7 +62,7 @@ export function parseArgs(argv) {
 async function shoot(browser, url, options) {
   let first;
   try {
-    first = await browser.capture(url, { width: options.width });
+    first = await browser.capture(url, { width: options.width, ignore: options.ignore });
   } catch (err) {
     // Gone or never there. Any other answer (a login, a rate limit) is not a missing page
     if (/^HTTP (404|410)$/.test(err.message)) return null;
@@ -69,7 +70,7 @@ async function shoot(browser, url, options) {
   }
   for (const layer of first.layers) layer.noise = [];
   for (let pass = 1; pass < options.passes; pass++) {
-    const again = await browser.capture(url, { width: options.width });
+    const again = await browser.capture(url, { width: options.width, ignore: options.ignore });
     for (const layer of first.layers) {
       const other = again.layers.find((l) => l.name === layer.name);
       if (!other) continue;
