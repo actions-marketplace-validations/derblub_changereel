@@ -54,6 +54,9 @@ describe("narrate", () => {
   test("an answer is cut down to its first sentence", () => {
     assert.equal(tidy('"The button text changed from **Buy** to Order now." It is also blue.'), "The button text changed from Buy to Order now.");
     assert.equal(tidy("<think>hm</think>\nAnswer: A price went up"), "A price went up.");
+    assert.equal(tidy('A section with the heading "AI in Vienna." was added.'), 'A section with the heading "AI in Vienna." was added.');
+    assert.equal(tidy('The text changed from "I build..." to "I check...". More.'), 'The text changed from "I build..." to "I check...".');
+    assert.equal(tidy('A heading "AI in Vienna. Made to measure" was added. Fine.'), 'A heading "AI in Vienna. Made to measure" was added.');
     assert.equal(tidy(""), "");
     assert.ok(tidy("word ".repeat(80)).length <= 160);
     assert.ok(tidy("word ".repeat(80)).endsWith("…"));
@@ -66,6 +69,13 @@ describe("narrate", () => {
     const added = excerpts({ ...scene, type: "added", box: null, beforeH: 0, afterH: 3000 });
     assert.equal(added.before, null);
     assert.deepEqual(added.after, { x: 0, y: 468, width: 400, height: 900 });
+    const grown = excerpts({ ...scene, box: null, beforeH: 40, afterH: 400 });
+    assert.equal(grown.before, null);
+    assert.equal(grown.after.height, 464);
+    const shrunk = excerpts({ ...scene, box: null, beforeH: 400, afterH: 40 });
+    assert.equal(shrunk.after, null);
+    const rewritten = excerpts({ ...scene, box: null, beforeH: 160, afterH: 128 });
+    assert.deepEqual([rewritten.before.height, rewritten.after.height], [224, 192]);
   });
 
   test("a cut stays inside the picture", () => {
@@ -78,6 +88,8 @@ describe("narrate", () => {
     assert.match(question({}, { before: {}, after: {} }), /before a change/);
     assert.match(question({}, { before: null, after: {} }), /was added/);
     assert.match(question({}, { before: {}, after: null }), /was removed/);
+    assert.match(question({ type: "changed" }, { before: null, after: {} }), /grew/);
+    assert.match(question({ type: "changed" }, { before: {}, after: null }), /shortened/);
     assert.match(question({}, { before: {}, after: {} }, "before"), /second picture is missing in the other one: it was added/);
     assert.match(question({}, { before: {}, after: {} }, "after"), /first picture is missing in the other one: it was removed/);
   });

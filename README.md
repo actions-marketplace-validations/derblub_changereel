@@ -169,7 +169,9 @@ python3 -m piper.download_voices en_US-lessac-medium
 changereel --base main --serve "npm run preview -- --port {port}" --narrate --voice en_US-lessac-medium.onnx
 ```
 
-The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing."). The default model needs about 3 GB and answers in about half a second per scene on a graphics card with 12 GB. It reads short text well and gets some things wrong, such as calling a link a button; a larger model is one `--model` away.
+The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing.").
+
+The default model needs about 3 GB and reads short text well: a changed price, a new label on a button. On a rewritten paragraph it is often wrong. `--model gemma3:12b` (8 GB) gets those right far more often and still answers in one to three seconds per scene on a graphics card with 12 GB. Neither is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
 
 The action does not narrate yet: the runners of GitHub have no model.
 

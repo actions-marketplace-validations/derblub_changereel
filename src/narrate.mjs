@@ -55,9 +55,15 @@ export function excerpts(scene, { around = 32, maxHeight = 900 } = {}) {
     }
     return { x: 0, y: y - around, width: scene.pageWidth, height: Math.min(height + around * 2, maxHeight) };
   };
+  // A band both sides have, but much taller on one: what makes it taller is the news, and
+  // the short side next to it would be a picture of something else
+  // (a paragraph that was rewritten and takes a line less is still shown on both sides)
+  const grown = scene.type === "changed" && !scene.box;
+  const before = scene.before && scene.beforeH && !(grown && scene.afterH >= scene.beforeH * 2);
+  const after = scene.after && scene.afterH && !(grown && scene.beforeH >= scene.afterH * 2);
   return {
-    before: scene.before && scene.beforeH ? rect(scene.beforeY, scene.beforeH) : null,
-    after: scene.after && scene.afterH ? rect(scene.afterY, scene.afterH) : null,
+    before: before ? rect(scene.beforeY, scene.beforeH) : null,
+    after: after ? rect(scene.afterY, scene.afterH) : null,
   };
 }
 
@@ -97,6 +103,12 @@ export function question(scene, sides, empty) {
   if (sides.before && sides.after) {
     return `These are two pictures of the same spot on a web page: first before a change, then after it. What changed on the page? ${rules}`;
   }
+  if (sides.after && scene.type === "changed") {
+    return `This part of a web page grew: something was added to it. What does it show now? ${rules}`;
+  }
+  if (sides.before && scene.type === "changed") {
+    return `This part of a web page was shortened: something of it was removed. What did it show? ${rules}`;
+  }
   if (sides.after) return `This part was added to a web page. What was added? ${rules} End the sentence with "was added".`;
   return `This part was removed from a web page. What was removed? ${rules} End the sentence with "was removed".`;
 }
@@ -110,9 +122,15 @@ export function tidy(answer, limit = 160) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^(answer|change|summary)\s*:\s*/i, "");
-  // The full stop of a sentence may stand inside the quotes it ends with
-  const end = text.match(/[.!?]"?(?=\s|$)/);
-  if (end) text = text.slice(0, end.index + end[0].length);
+  // Where the sentence ends: not at the dots of "…" and not at a full stop inside quoted
+  // text. A full stop right before closing quotes ends it only when a new sentence follows
+  // ('now." It is', but not 'Vienna." was added.').
+  for (const end of text.matchAll(/(?<!\.)[.!?](?!\.)(?:"(?=\s+[A-Z]|$)|(?=\s|$))/g)) {
+    const upTo = text.slice(0, end.index + end[0].length);
+    if ((upTo.match(/"/g) || []).length % 2) continue;
+    text = upTo;
+    break;
+  }
   // Quotes around the whole sentence go; quotes around a word inside it stay
   const whole = text.match(/^"([^"]*)"([.!?]?)$/);
   if (whole) text = whole[1] + whole[2];

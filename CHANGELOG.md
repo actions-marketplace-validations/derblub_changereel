@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- Narration: a sentence is no longer cut off at a full stop inside quoted text, and a part that grew a lot is shown to the model as it is now, not next to the short part it was.
+
 ## [0.2.0] - 2026-10-13
 
 - `--narrate`: a local model in Ollama says in one sentence what each change is; the sentence is shown under the page.
