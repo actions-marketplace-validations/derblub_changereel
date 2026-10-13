@@ -91,7 +91,8 @@ runs:
         IN_VOICE: ${{ inputs.voice }}
       run: |
         python3 -m venv "$RUNNER_TEMP/changereel-piper"
-        "$RUNNER_TEMP/changereel-piper/bin/pip" install --quiet piper-tts
+        # onnx lets Piper tell when each word is spoken, for the captions
+        "$RUNNER_TEMP/changereel-piper/bin/pip" install --quiet piper-tts onnx
         mkdir -p "$RUNNER_TEMP/changereel-voices"
         "$RUNNER_TEMP/changereel-piper/bin/python" -m piper.download_voices --data-dir "$RUNNER_TEMP/changereel-voices" "$IN_VOICE"
     - name: Compare

@@ -200,6 +200,8 @@ How good the sentences are depends on the model. On seven changes of a real site
 
 The local times are from a graphics card with 12 GB. The small local model reads short text well, a changed price or a new label on a button, and is often wrong on a rewritten paragraph. No model is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
 
+While the voice speaks, the sentence next to the page follows it word by word: what is still to come is grey, what was said is white. Piper tells when each word is spoken if the `onnx` package is installed next to it (`pip install piper-tts onnx`); without it the times are guessed from the length of the words.
+
 With `--language de` the sentences and the words in the video are German ("Geändert", "Vorher", "Nachher"); text from the page is quoted as it is. Take a voice that speaks it, such as `de_DE-thorsten-medium`.
 
 The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing.").

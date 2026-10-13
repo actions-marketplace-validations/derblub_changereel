@@ -14,7 +14,8 @@
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { textsFor } from "./texts.mjs";
 
@@ -186,6 +187,8 @@ async function askOllama(text, images, { model, host, fetch: request = fetch }) 
 }
 
 // The models that take a fallback: when one declines, the API runs the request on another
+const HERE = dirname(fileURLToPath(import.meta.url));
+
 const WITH_FALLBACK = /^claude-(opus-5|sonnet-5-5|fable-5-1)/;
 
 /** Ask Claude; the pictures go to Anthropic. The key comes from ANTHROPIC_API_KEY. */
@@ -261,23 +264,74 @@ export function wavSeconds(buffer) {
   return 0;
 }
 
-/** Speak a sentence into a WAV file with Piper; gives back how long it plays. */
-export function speak(text, file, { voice, piper }) {
+/**
+ * When each word is spoken, guessed from its length: the voice takes about as long for a
+ * word as the word has letters, and rests after a comma. Used when Piper cannot tell.
+ */
+export function estimateWords(text, seconds, { lead = 0.06, tail = 0.2 } = {}) {
+  const written = text.split(/\s+/).filter(Boolean);
+  const weights = written.map((word) => Math.max(1, word.replace(/[^\p{L}\p{N}]/gu, "").length) + (/[,;:]$/.test(word) ? 2 : 0));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const span = Math.max(0, seconds - lead - tail);
+  let at = lead;
+  return written.map((word, index) => {
+    const start = at;
+    at += (weights[index] / total) * span;
+    return { text: word, start: Number(start.toFixed(3)), end: Number(at.toFixed(3)) };
+  });
+}
+
+/** The Python a `piper` command runs in, from its first line; null when it is no such script. */
+export function pythonOf(piper) {
+  const places = piper.includes("/") ? [piper] : (process.env.PATH || "").split(delimiter).map((dir) => join(dir, piper));
+  for (const place of places) {
+    try {
+      const first = readFileSync(place, "utf8").split("\n", 1)[0];
+      if (first.startsWith("#!") && /python/.test(first)) return first.slice(2).trim().split(" ")[0];
+      return null;
+    } catch {
+      // not there, or not readable: the next place
+    }
+  }
+  return null;
+}
+
+function run(command, args, input) {
   return new Promise((done, fail) => {
-    const child = spawn(piper, ["--model", voice, "--output_file", file], { stdio: ["pipe", "ignore", "pipe"] });
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let output = "";
     let errors = "";
+    child.stdout.on("data", (chunk) => (output += chunk));
     child.stderr.on("data", (chunk) => (errors += chunk));
-    child.on("error", (err) => fail(new Error(`Could not run ${piper}: ${err.message}`)));
-    child.on("exit", (code) => {
-      if (code !== 0) return fail(new Error(`${piper} failed: ${errors.trim().split("\n").at(-1)}`));
-      done(wavSeconds(readFileSync(file)));
-    });
-    child.stdin.end(`${text}\n`);
+    child.on("error", (err) => fail(new Error(`Could not run ${command}: ${err.message}`)));
+    child.on("exit", (code) => (code === 0 ? done(output) : fail(new Error(`${command} failed: ${errors.trim().split("\n").at(-1)}`))));
+    child.stdin.end(`${input}\n`);
   });
 }
 
 /**
- * Give every scene its sentence (`text`) and, with a voice, its sound (`audio`, `seconds`).
+ * Speak a sentence into a WAV file with Piper. Gives back how long it plays and when each
+ * word is spoken. Piper knows that when it is asked through its Python (speak.py); asked
+ * as a command it only writes the sound, and the words are guessed.
+ */
+export async function speak(text, file, { voice, piper }) {
+  const python = pythonOf(piper);
+  if (python) {
+    try {
+      const told = JSON.parse(await run(python, [join(HERE, "speak.py"), "--model", voice, "--output", file], text));
+      return { seconds: told.seconds, words: told.words.length ? told.words : estimateWords(text, told.seconds) };
+    } catch {
+      // an older Piper, or one without onnx: the command still speaks
+    }
+  }
+  await run(piper, ["--model", voice, "--output_file", file], text);
+  const seconds = wavSeconds(readFileSync(file));
+  return { seconds, words: estimateWords(text, seconds) };
+}
+
+/**
+ * Give every scene its sentence (`text`) and, with a voice, its sound (`audio`, `seconds`)
+ * and the time of each word (`words`).
  * A scene the model fails on gets the plain sentence; a voice that fails stops the run,
  * because a video with sound on some scenes only is not what was asked for.
  */
@@ -297,7 +351,9 @@ export async function narrate(scenes, out, options, log = console.log) {
     }
     if (options.voice) {
       scene.audio = `audio/${index + 1}.wav`;
-      scene.seconds = await speak(scene.text, join(out, scene.audio), options);
+      const spoken = await speak(scene.text, join(out, scene.audio), options);
+      scene.seconds = spoken.seconds;
+      scene.words = spoken.words;
     }
     log(`${index + 1}  ${scene.text}`);
   }

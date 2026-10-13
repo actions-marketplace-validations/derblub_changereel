@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { PNG } from "pngjs";
 import { parseArgs } from "../src/cli.mjs";
-import { cut, describe as describeScene, excerpts, isEmpty, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
+import { cut, describe as describeScene, estimateWords, excerpts, isEmpty, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
 
 /** A scene on a page of 400 by 2000 pixels with both pictures on disk. */
 function sample(change = {}) {
@@ -168,6 +168,15 @@ describe("narrate", () => {
     assert.equal(wavSeconds(wav(44100)), 1);
     assert.equal(wavSeconds(wav(22050, 0)), 0.5);
     assert.equal(wavSeconds(wav(22050, 0xffffffff)), 0.5);
+  });
+
+  test("words get their time by their length when the voice cannot tell", () => {
+    const words = estimateWords("A new, longer heading", 3);
+    assert.deepEqual(words.map((word) => word.text), ["A", "new,", "longer", "heading"]);
+    assert.equal(words[0].start, 0.06);
+    assert.equal(words.at(-1).end, 2.8);
+    assert.ok(words[2].end - words[2].start > words[0].end - words[0].start);
+    for (let index = 1; index < words.length; index++) assert.equal(words[index].start, words[index - 1].end);
   });
 
   test("narration is off unless asked for", () => {

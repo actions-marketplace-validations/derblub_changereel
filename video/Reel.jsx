@@ -91,6 +91,30 @@ const rise = (frame, from = 0, distance = 24, length = 36) => ({
   transform: `translateY(${interpolate(frame, [from, from + length], [distance, 0], { ...clamp, easing: reveal })}px)`,
 });
 
+/**
+ * A word of a spoken sentence: grey until the voice reaches it, white once it is said. The
+ * white runs through the word with a soft edge while it is spoken, so the eye is led along
+ * and not called.
+ */
+const Word = ({ word, seconds }) => {
+  const length = Math.max(word.end - word.start, 0.08);
+  const said = interpolate(seconds, [word.start, word.start + length], [0, 1], clamp);
+  return (
+    <>
+      <span
+        style={{
+          backgroundImage: `linear-gradient(90deg, ${WHITE} ${said * 140 - 40}%, ${GRAY} ${said * 140}%)`,
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+        }}
+      >
+        {word.text}
+      </span>{" "}
+    </>
+  );
+};
+
 /** A fact of the opening card: what it is, and its value. */
 const Fact = ({ name, value }) => (
   <div>
@@ -278,7 +302,9 @@ const Scene = ({ scene, index, texts }) => {
               ...rise(frame, 16),
             }}
           >
-            {scene.text}
+            {scene.words?.length
+              ? scene.words.map((word, index) => <Word key={index} word={word} seconds={(frame - VOICE_FROM) / FPS} />)
+              : scene.text}
           </p>
         )}
       </div>
