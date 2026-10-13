@@ -1,6 +1,6 @@
 {
   "name": "changereel",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Find what a change did to the pages of a site and show it as a before and after video.",
   "type": "module",
   "bin": {
