@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- The video has a new look: a column that says what the change is next to a window that shows the page at its true size, an opening card with the facts of the run, a closing card that lists the changes, and a row of cells that counts the scenes.
+- The window moves closer to a small change once it is framed.
+- The frame around changed pixels grows to the words they belong to, so a changed digit no longer cuts a price in two.
+- `reel.json` next to the video holds what it was rendered from.
+
 ## [0.4.0] - 2026-10-13
 
 - `--language de` (input `language`): German sentences and German words in the video.

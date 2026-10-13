@@ -144,6 +144,57 @@ export function changedBox(before, after, band) {
 }
 
 /**
+ * A box around changed pixels, widened to what they belong to. Of a price that went from
+ * 599 to 549 one digit differs; a frame around that digit cuts the number in two. The box
+ * grows to each side until it meets `gap` columns or rows in which nothing is drawn, so it
+ * holds the words around the digit, and stops at the space around them. A side that finds
+ * no such space within `reach` pixels stays where it was: the change sits in a picture or
+ * on a pattern, and has no edge to grow to.
+ */
+export function snapBox(png, band, box, { gap = 10, reach = 240 } = {}) {
+  const pixel = (x, y) => png.data.readUInt32LE((y * png.width + x) * 4);
+  let { x: left, y: top } = box;
+  let right = box.x + box.width - 1;
+  let bottom = box.y + box.height - 1;
+  top += band.afterY;
+  bottom += band.afterY;
+  const limit = { top: band.afterY, bottom: Math.min(png.height, band.afterY + band.afterH) - 1 };
+  const flatColumn = (x) => {
+    const first = pixel(x, top);
+    for (let y = top + 1; y <= bottom; y++) if (pixel(x, y) !== first) return false;
+    return true;
+  };
+  const flatRow = (y) => {
+    const first = pixel(left, y);
+    for (let x = left + 1; x <= right; x++) if (pixel(x, y) !== first) return false;
+    return true;
+  };
+  // Walk outwards from `from` until `gap` flat lines in a row; the edge is the last one drawn
+  const walk = (from, step, end, flat) => {
+    let edge = from;
+    let run = 0;
+    for (let at = from + step; step > 0 ? at <= end : at >= end; at += step) {
+      if (Math.abs(at - from) > reach) return from;
+      if (flat(at)) {
+        if (++run >= gap) return edge;
+      } else {
+        run = 0;
+        edge = at;
+      }
+    }
+    return edge;
+  };
+  // Twice: what is found to the sides changes which rows count, and the other way round
+  for (let pass = 0; pass < 2; pass++) {
+    left = walk(left, -1, 0, flatColumn);
+    right = walk(right, 1, png.width - 1, flatColumn);
+    top = walk(top, -1, limit.top, flatRow);
+    bottom = walk(bottom, 1, limit.bottom, flatRow);
+  }
+  return { ...box, x: left, y: top - band.afterY, width: right - left + 1, height: bottom - top + 1 };
+}
+
+/**
  * The changes between two screenshots (PNG buffers of the same width), largest first.
  * Left out are added and removed bands lower than `minHeight` rows, and bands of unchanged
  * height in which fewer than `minPixels` pixels differ.
@@ -170,7 +221,7 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
       // The box is measured over the rows both sides have. Where one side is much taller,
       // most of the change lies below them, and the band says more than the box.
       const grew = Math.abs(band.afterH - band.beforeH) > Math.max(16, Math.min(band.beforeH, band.afterH) / 4);
-      changes.push({ ...band, type: "changed", box: grew ? null : box });
+      changes.push({ ...band, type: "changed", box: grew || !box ? null : snapBox(after, band, box) });
     } else if (Math.max(was.height, is.height) >= minHeight) {
       changes.push({
         type: is.height ? "added" : "removed",

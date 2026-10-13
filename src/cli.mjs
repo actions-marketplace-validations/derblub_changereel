@@ -314,12 +314,22 @@ async function main() {
       console.log(`Describing ${scenes.length} scene${scenes.length === 1 ? "" : "s"} with ${options.model} …`);
       await narrate(scenes, options.out, options);
     }
+    const texts = textsFor(options.language);
+    // A version by its short name: the commit or branch, or the host of a running site
+    const short = (version) => (URL.canParse(version) ? new URL(version).host : version);
     const props = {
       title: options.title,
-      summary: textsFor(options.language).summary(total, changed.length, pages.length),
+      summary: texts.summary(total, changed.length, pages.length),
       language: options.language,
+      facts: [
+        [texts.changes, String(total)],
+        [texts.pages, texts.of(changed.length, pages.length)],
+        [texts.before, short(options.base ?? options.before)],
+        [texts.after, short(options.base ? options.head : options.after)],
+      ],
       scenes,
     };
+    writeFileSync(join(options.out, "reel.json"), JSON.stringify(props, null, 2) + "\n");
     console.log(`Rendering ${scenes.length} scene${scenes.length === 1 ? "" : "s"} …`);
     video = await render(props, options.out);
     console.log(video);
