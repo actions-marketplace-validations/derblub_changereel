@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- `--narrate`: a local model in Ollama says in one sentence what each change is; the sentence is shown under the page.
+- `--voice`: Piper speaks the sentences, and a scene lasts as long as its sentence.
+
 ## [0.1.0] - 2026-10-13
 
 - Compares every route of two versions of a site and renders the changes as a video: the page before, a wipe to the page after, a frame around what differs.

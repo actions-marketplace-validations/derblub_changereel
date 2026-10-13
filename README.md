@@ -149,8 +149,29 @@ changereel --before https://example.com --after http://localhost:3000
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |
 | `--no-video` | | Only compare and write `changes.json`. |
+| `--narrate` | | Let a local model say in one sentence what each change is. |
+| `--model` | `gemma3:4b` | The Ollama model that writes the sentences. It has to read pictures. |
+| `--ollama` | `http://127.0.0.1:11434` | Where Ollama listens (or `OLLAMA_HOST`). |
+| `--voice` | | A Piper voice (`.onnx`) that speaks the sentences. Without it they are captions only. |
+| `--piper` | `piper` | The Piper command (or `CHANGEREEL_PIPER`). |
 
 You need Node 22 or newer and a Chrome or Chromium (`CHROME_PATH` when it is not in a usual place). The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
+
+## With a voice, on your own machine
+
+With `--narrate`, every scene gets a sentence: "The price of the standing desk changed from 599 euros to 549 euros." A model that reads pictures writes it from the changed spot before and after, and with `--voice` it is spoken and the scene lasts as long as the sentence.
+
+Both run locally, the model in [Ollama](https://ollama.com) and the voice in [Piper](https://github.com/OHF-Voice/piper1-gpl). No screenshot of your site is sent anywhere.
+
+```console
+ollama pull gemma3:4b
+python3 -m piper.download_voices en_US-lessac-medium
+changereel --base main --serve "npm run preview -- --port {port}" --narrate --voice en_US-lessac-medium.onnx
+```
+
+The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing."). The default model needs about 3 GB and answers in about half a second per scene on a graphics card with 12 GB. It reads short text well and gets some things wrong, such as calling a link a button; a larger model is one `--model` away.
+
+The action does not narrate yet: the runners of GitHub have no model.
 
 ## Development
 

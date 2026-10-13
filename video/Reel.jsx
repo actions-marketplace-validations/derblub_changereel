@@ -3,10 +3,12 @@
  *
  * A scene shows the page before, wipes to the page after and frames what differs. The page
  * is a full-height screenshot behind a window of 720 CSS pixels, scrolled to the change.
+ * A scene with a sentence shows it under the window, and plays it when it was spoken.
  */
 import React, { useEffect, useState } from "react";
 import {
   AbsoluteFill,
+  Audio,
   Composition,
   Easing,
   Img,
@@ -41,7 +43,15 @@ const WINDOW_W = 1600;
 const WINDOW_H = 900;
 const VIEW_H = 720;
 
-export const duration = (scenes) => TITLE + scenes.length * SCENE + END;
+// A spoken scene starts talking once the page is in view and ends a moment after the voice
+const VOICE_FROM = 15;
+const VOICE_REST = 20;
+
+/** How long a scene lasts: its usual length, or longer when its sentence takes longer to say. */
+export const sceneFrames = (scene) =>
+  Math.max(SCENE, scene.seconds ? VOICE_FROM + Math.ceil(scene.seconds * FPS) + VOICE_REST : 0);
+
+export const duration = (scenes) => TITLE + scenes.reduce((sum, scene) => sum + sceneFrames(scene), 0) + END;
 
 function useFonts() {
   const [handle] = useState(() => delayRender("fonts"));
@@ -109,6 +119,7 @@ const KIND = { added: "Added", removed: "Removed", changed: "Changed" };
 
 const Scene = ({ scene, index, count }) => {
   const frame = useCurrentFrame();
+  const length = sceneFrames(scene);
   const scale = WINDOW_W / scene.pageWidth;
   const hasBefore = Boolean(scene.before);
   const hasAfter = Boolean(scene.after);
@@ -128,7 +139,7 @@ const Scene = ({ scene, index, count }) => {
     extrapolateRight: "clamp",
     easing: ease,
   });
-  const opacity = interpolate(frame, [0, 12, SCENE - 10, SCENE], [0, 1, 1, 0], { extrapolateRight: "clamp" });
+  const opacity = interpolate(frame, [0, 12, length - 10, length], [0, 1, 1, 0], { extrapolateRight: "clamp" });
 
   // The frame goes around the changed pixels, or the whole band when a section came or went
   const band = onAfter
@@ -185,6 +196,32 @@ const Scene = ({ scene, index, count }) => {
           }}
         />
       </div>
+      {scene.text && (
+        <p
+          style={{
+            position: "absolute",
+            left: 160,
+            right: 160,
+            top: 1024,
+            height: 56,
+            margin: 0,
+            lineHeight: "56px",
+            fontFamily: SANS,
+            fontSize: 26,
+            color: WHITE,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {scene.text}
+        </p>
+      )}
+      {scene.audio && (
+        <Sequence from={VOICE_FROM}>
+          <Audio src={staticFile(scene.audio)} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 };
@@ -202,17 +239,23 @@ const End = ({ summary }) => {
 
 export const Reel = ({ title, summary, scenes }) => {
   useFonts();
+  const starts = [];
+  let at = TITLE;
+  for (const scene of scenes) {
+    starts.push(at);
+    at += sceneFrames(scene);
+  }
   return (
     <AbsoluteFill style={{ background: INK }}>
       <Sequence durationInFrames={TITLE}>
         <Title title={title} summary={summary} />
       </Sequence>
       {scenes.map((scene, index) => (
-        <Sequence key={index} from={TITLE + index * SCENE} durationInFrames={SCENE}>
+        <Sequence key={index} from={starts[index]} durationInFrames={sceneFrames(scene)}>
           <Scene scene={scene} index={index} count={scenes.length} />
         </Sequence>
       ))}
-      <Sequence from={TITLE + scenes.length * SCENE} durationInFrames={END}>
+      <Sequence from={at} durationInFrames={END}>
         <End summary={summary} />
       </Sequence>
     </AbsoluteFill>

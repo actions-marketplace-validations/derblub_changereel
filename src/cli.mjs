@@ -7,8 +7,9 @@
  *
  * Both sites have to be running. Every route is captured on both, the two pictures are
  * compared (see diff.mjs), and each change becomes a scene: the page before, a wipe to the
- * page after, and a frame around what is different. Writes the screenshots, changes.json
- * and the video to --out (default ./out).
+ * page after, and a frame around what is different. With --narrate a local model says in
+ * one sentence what each change is, and with --voice the sentence is spoken (see
+ * narrate.mjs). Writes the screenshots, changes.json and the video to --out (default ./out).
  *
  * Exit code 0 also when nothing changed (then there is no video), 2 when it could not run.
  */
@@ -17,6 +18,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
+import { narrate } from "./narrate.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
 import { serveVersions } from "./versions.mjs";
 
@@ -61,6 +63,12 @@ export function parseArgs(argv) {
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
     video: !argv.includes("--no-video"),
+    // A sentence per scene from a local model, spoken when there is a voice
+    narrate: argv.includes("--narrate"),
+    model: opt("model") || "gemma3:4b",
+    host: opt("ollama") || process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
+    voice: opt("voice"),
+    piper: opt("piper") || process.env.CHANGEREEL_PIPER || "piper",
   };
 }
 
@@ -300,6 +308,10 @@ async function main() {
   let video = "";
   if (total && options.video) {
     const scenes = toScenes(changed, options);
+    if (options.narrate) {
+      console.log(`Describing ${scenes.length} scene${scenes.length === 1 ? "" : "s"} with ${options.model} …`);
+      await narrate(scenes, options.out, options);
+    }
     const props = {
       title: options.title,
       summary: `${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} pages`,
