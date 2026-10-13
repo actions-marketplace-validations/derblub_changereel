@@ -175,9 +175,14 @@ export async function openBrowser({ wait = 500 } = {}) {
           const style = document.createElement("style");
           // Frames hold what the page does not own (a captcha, a map, a video player) and
           // load in another state on every visit: they keep their place, but are not drawn
-          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; } iframe { visibility: hidden !important; }" + ${JSON.stringify(
-            ignore.length ? ` ${ignore.join(", ")} { visibility: hidden !important; }` : "",
-          )};
+          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; } iframe { visibility: hidden !important; }";
+          // What --ignore names is drawn in the pictures that are shown and left out of the
+          // ones that are compared: its own sheet, switched on for those
+          const left = document.createElement("style");
+          left.id = "changereel-ignore";
+          left.media = "not all";
+          left.textContent = ${JSON.stringify(ignore.length ? `${ignore.join(", ")} { visibility: hidden !important; }` : "")};
+          document.head.append(left);
           document.head.append(style);
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         })()`,
@@ -245,11 +250,17 @@ export async function openBrowser({ wait = 500 } = {}) {
       };
     })()`;
 
+    const leaveOut = (on) =>
+      evaluate(`(async () => { document.getElementById("changereel-ignore").media = "${on ? "all" : "not all"}"; await ${settle}; })()`);
     const layers = [];
     const scroller = await evaluate(place);
     let shell;
+    let shown;
     if (scroller) {
+      shown = await shot({ x: 0, y: 0, width, height });
+      await leaveOut(true);
       shell = PNG.sync.read(await shot({ x: 0, y: 0, width, height }));
+      await leaveOut(false);
       await cdp.send(
         "Emulation.setDeviceMetricsOverride",
         { width, height: Math.min(height + scroller.full - scroller.height, MAX_HEIGHT), deviceScaleFactor: 1, mobile: false },
@@ -260,9 +271,11 @@ export async function openBrowser({ wait = 500 } = {}) {
     const { cssContentSize } = await cdp.send("Page.getLayoutMetrics", {}, sessionId);
     const full = Math.min(Math.ceil(cssContentSize.height), MAX_HEIGHT);
     const page = await shot({ x: 0, y: 0, width, height: full }, true);
+    await leaveOut(true);
+    const compared = ignore.length ? await shot({ x: 0, y: 0, width, height: full }, true) : page;
     if (scroller) {
       const grown = await evaluate(place);
-      const tall = PNG.sync.read(page);
+      const tall = PNG.sync.read(compared);
       const rows = Math.min(grown.height, tall.height - grown.y);
       const content = new PNG({ width: grown.width, height: rows });
       for (let row = 0; row < rows; row++) {
@@ -275,9 +288,9 @@ export async function openBrowser({ wait = 500 } = {}) {
         blank.data.fill(0x80, (row * width + scroller.x) * 4, (row * width + scroller.x + scroller.width) * 4);
       }
       layers.push({ name: "content", png: PNG.sync.write(content), x: grown.x, y: grown.y, shown: "page" });
-      layers.push({ name: "shell", png: PNG.sync.write(blank), x: 0, y: 0, shown: "window", window: PNG.sync.write(shell) });
+      layers.push({ name: "shell", png: PNG.sync.write(blank), x: 0, y: 0, shown: "window", window: shown });
     } else {
-      layers.push({ name: "page", png: page, x: 0, y: 0, shown: "page" });
+      layers.push({ name: "page", png: compared, x: 0, y: 0, shown: "page" });
     }
     return { page, layers };
   }

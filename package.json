@@ -6,7 +6,7 @@
   "bin": { "changereel": "src/cli.mjs" },
   "files": ["src", "video"],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.mjs"
   },
   "engines": { "node": ">=22" },
   "dependencies": {

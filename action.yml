@@ -1,0 +1,100 @@
+name: changereel
+author: Daniel Kurdoghlian, Pushing Pixels
+description: Find what a pull request changed on the pages of your site and show it as a before and after video.
+branding:
+  icon: film
+  color: green
+
+inputs:
+  serve:
+    description: "Command that serves one version of the site; {port} is replaced by the port to listen on, e.g. 'npm run preview -- --port {port}'."
+    required: true
+  build:
+    description: "Command that builds one version, run in each of the two checkouts, e.g. 'npm ci && npm run build'. Empty builds nothing."
+    default: ""
+  base:
+    description: "Commit, branch or tag to compare with. Default: the base of the pull request."
+    default: ${{ github.event.pull_request.base.sha }}
+  head:
+    description: "Commit to show as the version after the change. Default: what is checked out."
+    default: HEAD
+  routes:
+    description: "Paths to compare, separated by spaces or one per line. Empty reads them from the sitemaps of both versions."
+    default: ""
+  ignore:
+    description: "CSS selectors, separated by commas, of parts to leave out of the comparison: what is random or animated."
+    default: ""
+  title:
+    description: "Title on the first card of the video."
+    default: ${{ github.event.pull_request.title || 'What changed' }}
+  video:
+    description: "'false' only compares and writes the summary and the report."
+    default: "true"
+  passes:
+    description: "How often each page is captured. What differs between visits of the same version is left out."
+    default: "2"
+  max-scenes:
+    description: "Scenes in the video."
+    default: "8"
+  ready-timeout:
+    description: "Seconds to wait for a served version to answer."
+    default: "120"
+
+outputs:
+  changes:
+    description: "Number of visible changes."
+    value: ${{ steps.reel.outputs.changes }}
+  pages:
+    description: "Number of pages with a change."
+    value: ${{ steps.reel.outputs.pages }}
+  video:
+    description: "Path to the video. Empty when nothing changed or video is 'false'."
+    value: ${{ steps.reel.outputs.video }}
+  report:
+    description: "Path to changes.json."
+    value: ${{ steps.reel.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    # The comparison needs Node 22 or newer for its WebSocket. A job that already has it keeps its own.
+    - name: Look for Node
+      id: node
+      shell: bash
+      run: |
+        major="$(node --version 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/')"
+        if [ "${major:-0}" -lt 22 ]; then echo "setup=true" >> "$GITHUB_OUTPUT"; fi
+    - uses: actions/setup-node@v6
+      if: steps.node.outputs.setup == 'true'
+      with:
+        node-version: 24
+    - name: Install changereel
+      shell: bash
+      run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
+    - name: Compare
+      id: reel
+      shell: bash
+      env:
+        IN_SERVE: ${{ inputs.serve }}
+        IN_BUILD: ${{ inputs.build }}
+        IN_BASE: ${{ inputs.base }}
+        IN_HEAD: ${{ inputs.head }}
+        IN_ROUTES: ${{ inputs.routes }}
+        IN_IGNORE: ${{ inputs.ignore }}
+        IN_TITLE: ${{ inputs.title }}
+        IN_VIDEO: ${{ inputs.video }}
+        IN_PASSES: ${{ inputs.passes }}
+        IN_MAX_SCENES: ${{ inputs.max-scenes }}
+        IN_READY_TIMEOUT: ${{ inputs.ready-timeout }}
+      run: |
+        if [ -z "$IN_BASE" ]; then
+          echo "::error::No base to compare with. Outside a pull request, set the base input."
+          exit 2
+        fi
+        args=(--base "$IN_BASE" --head "$IN_HEAD" --serve "$IN_SERVE" --out "$RUNNER_TEMP/changereel-$GITHUB_ACTION"
+              --title "$IN_TITLE" --passes "$IN_PASSES" --max-scenes "$IN_MAX_SCENES" --ready-timeout "$IN_READY_TIMEOUT")
+        if [ -n "$IN_BUILD" ]; then args+=(--build "$IN_BUILD"); fi
+        if [ -n "$IN_ROUTES" ]; then args+=(--routes "$IN_ROUTES"); fi
+        if [ -n "$IN_IGNORE" ]; then args+=(--ignore "$IN_IGNORE"); fi
+        if [ "$IN_VIDEO" = false ]; then args+=(--no-video); fi
+        node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"

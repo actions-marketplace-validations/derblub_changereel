@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      - run: npm test
+
+  # The action itself, on a repository made here from the two sample sites of the tests:
+  # one commit with the site before, one with the site after. It has to find the six
+  # changes they were written to have and render the video.
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Make a repository with two versions
+        run: |
+          mkdir "$RUNNER_TEMP/shop" && cd "$RUNNER_TEMP/shop"
+          git init -q -b main
+          cp "$GITHUB_WORKSPACE/test/serve.mjs" .
+          cp -r "$GITHUB_WORKSPACE/test/site/before" site
+          git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m before
+          cp -r "$GITHUB_WORKSPACE/test/site/after/." site/
+          git add -A && git -c user.name=ci -c user.email=ci@example.com commit -q -m after
+      - uses: ./
+        id: reel
+        with:
+          base: HEAD~1
+          serve: node serve.mjs site {port}
+          title: Chairworks
+        env:
+          CHANGEREEL_CWD: ${{ runner.temp }}/shop
+      - run: test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: changereel
+          path: ${{ steps.reel.outputs.video }}

@@ -12,12 +12,13 @@
  *
  * Exit code 0 also when nothing changed (then there is no video), 2 when it could not run.
  */
-import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
+import { serveVersions } from "./versions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -26,11 +27,15 @@ export function parseArgs(argv) {
     const i = argv.indexOf(`--${name}`);
     return i === -1 ? undefined : argv[i + 1];
   };
+  // Either two running sites, or a commit to build and serve next to the current one
+  const base = opt("base");
   const site = (name) => {
     const value = (opt(name) || "").replace(/\/$/, "");
-    if (!URL.canParse(value)) throw new Error(`--${name} needs the address of the running site`);
+    if (base && !value) return null;
+    if (!URL.canParse(value)) throw new Error(`--${name} needs the address of the running site, or use --base`);
     return value;
   };
+  if (base && !opt("serve")) throw new Error("--base needs --serve, the command that serves a version on {port}");
   const number = (name, fallback) => {
     const value = Number(opt(name) ?? fallback);
     if (!Number.isFinite(value) || value < 0) throw new Error(`--${name} needs a number`);
@@ -39,6 +44,11 @@ export function parseArgs(argv) {
   return {
     before: site("before"),
     after: site("after"),
+    base,
+    head: opt("head") || "HEAD",
+    build: opt("build"),
+    serve: opt("serve"),
+    readyTimeout: number("ready-timeout", 120) * 1000,
     routes: (opt("routes") || "").split(/[\s,]+/).filter(Boolean),
     sitemap: opt("sitemap"),
     ignore: (opt("ignore") || "").split(",").map((selector) => selector.trim()).filter(Boolean),
@@ -236,26 +246,73 @@ async function render(props, out) {
   return outputLocation;
 }
 
+/** The changes as Markdown, for a job summary or a comment. */
+export function renderMarkdown(pages, checked) {
+  const changed = pages.filter((page) => page.changes.length);
+  const total = changed.reduce((sum, page) => sum + page.changes.length, 0);
+  const lines = [`## ${total} visible change${total === 1 ? "" : "s"} on ${changed.length} of ${checked} pages`, ""];
+  if (!total) return lines.join("\n") + "No page looks different.\n";
+  lines.push("| Page | Change | Where |", "| --- | --- | --- |");
+  const kind = { added: "Added", removed: "Removed", changed: "Changed" };
+  for (const page of changed) {
+    for (const change of page.changes) {
+      const where = change.page
+        ? "the whole page"
+        : change.type === "removed"
+          ? `${change.beforeH} px at ${change.beforeY} px, before`
+          : `${change.afterH} px at ${change.afterY} px${change.layer === "shell" ? ", outside the scrolling part" : ""}`;
+      lines.push(`| \`${page.route.replace(/\|/g, "\\|")}\` | ${kind[change.type]} | ${where} |`);
+    }
+  }
+  if (changed.some((page) => page.unstable)) {
+    lines.push("", "Parts of some pages differ between two visits of the same version and were left out.");
+  }
+  return lines.join("\n") + "\n";
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const pages = await compare(options);
+  let versions;
+  if (options.base) {
+    // CHANGEREEL_CWD: the repository to take the versions from, when it is not where this runs
+    versions = await serveVersions({ ...options, cwd: process.env.CHANGEREEL_CWD || process.cwd() });
+    options.before = versions.before;
+    options.after = versions.after;
+  }
+  let pages;
+  try {
+    pages = await compare(options);
+  } finally {
+    await versions?.stop();
+  }
   const changed = pages.filter((page) => page.changes.length);
   const total = changed.reduce((sum, page) => sum + page.changes.length, 0);
   mkdirSync(options.out, { recursive: true });
   writeFileSync(
     join(options.out, "changes.json"),
-    JSON.stringify({ before: options.before, after: options.after, checked: pages.length, pages: changed }, null, 2) + "\n",
+    JSON.stringify(
+      { before: options.base ?? options.before, after: options.base ? options.head : options.after, checked: pages.length, pages: changed },
+      null,
+      2,
+    ) + "\n",
   );
   console.log(`\n${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} routes`);
-  if (!total || !options.video) return;
-  const scenes = toScenes(changed, options);
-  const props = {
-    title: options.title,
-    summary: `${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} pages`,
-    scenes,
-  };
-  console.log(`Rendering ${scenes.length} scene${scenes.length === 1 ? "" : "s"} …`);
-  console.log(await render(props, options.out));
+  let video = "";
+  if (total && options.video) {
+    const scenes = toScenes(changed, options);
+    const props = {
+      title: options.title,
+      summary: `${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} pages`,
+      scenes,
+    };
+    console.log(`Rendering ${scenes.length} scene${scenes.length === 1 ? "" : "s"} …`);
+    video = await render(props, options.out);
+    console.log(video);
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, renderMarkdown(pages, pages.length));
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `changes=${total}\npages=${changed.length}\nvideo=${video}\nreport=${join(options.out, "changes.json")}\n`);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

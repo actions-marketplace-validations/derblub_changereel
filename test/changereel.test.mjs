@@ -6,7 +6,10 @@ import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { openBrowser } from "../src/browser.mjs";
-import { compare, parseArgs, toScenes } from "../src/cli.mjs";
+import { execFileSync } from "node:child_process";
+import { cpSync, writeFileSync } from "node:fs";
+import { compare, parseArgs, renderMarkdown, toScenes } from "../src/cli.mjs";
+import { serveVersions } from "../src/versions.mjs";
 import { alignRows, diffPages, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
 import { serve } from "./serve.mjs";
@@ -234,6 +237,9 @@ describe("parseArgs", () => {
     assert.equal(options.width, 1280);
     assert.equal(options.video, true);
     assert.throws(() => parseArgs(["--before", "http://a.test"]), /--after/);
+    assert.throws(() => parseArgs(["--base", "main"]), /--serve/);
+    const built = parseArgs(["--base", "main", "--serve", "npx serve -l {port}", "--build", "npm run build"]);
+    assert.deepEqual([built.base, built.head, built.before, built.build], ["main", "HEAD", null, "npm run build"]);
   });
 });
 
@@ -265,6 +271,89 @@ describe("capture", { skip: !chrome && "no Chromium" }, () => {
       await browser.close();
       site.close();
     }
+  });
+});
+
+describe("ignore", { skip: !chrome && "no Chromium" }, () => {
+  test("what --ignore names is in the picture that is shown and not in the one that is compared", async () => {
+    const site = await serve(join(HERE, "site", "after"));
+    const browser = await openBrowser({ wait: 0 });
+    try {
+      const plain = await browser.capture(site.url + "/", { width: 1000 });
+      const { page, layers } = await browser.capture(site.url + "/", { width: 1000, ignore: [".note"] });
+      assert.equal(Buffer.compare(page, plain.page), 0);
+      assert.notEqual(Buffer.compare(layers[0].png, page), 0);
+      await assert.rejects(browser.capture(site.url + "/", { ignore: ["a["] }), /not a selector/);
+    } finally {
+      await browser.close();
+      site.close();
+    }
+  });
+});
+
+describe("versions", () => {
+  test("two commits of a repository are built and served, and cleaned up after", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "changereel-repo-"));
+    const git = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    cpSync(join(HERE, "serve.mjs"), join(repo, "serve.mjs"));
+    cpSync(join(HERE, "site", "before"), join(repo, "site"), { recursive: true });
+    git("add", "-A");
+    git("commit", "-q", "-m", "before");
+    cpSync(join(HERE, "site", "after"), join(repo, "site"), { recursive: true });
+    git("add", "-A");
+    git("commit", "-q", "-m", "after");
+    writeFileSync(join(repo, "uncommitted.txt"), "stays");
+
+    const versions = await serveVersions(
+      { cwd: repo, base: "HEAD~1", build: "echo built > site/built.txt", serve: `"${process.execPath}" serve.mjs site {port}` },
+      () => {},
+    );
+    try {
+      const text = async (url) => (await fetch(url)).text();
+      assert.match(await text(versions.before + "/"), /Shop now/);
+      assert.match(await text(versions.after + "/"), /Browse the catalogue/);
+      assert.equal((await fetch(versions.before + "/contact.html")).status, 404);
+      assert.equal((await fetch(versions.after + "/contact.html")).status, 200);
+      assert.match(await text(versions.after + "/built.txt"), /built/);
+    } finally {
+      await versions.stop();
+    }
+    assert.equal(execFileSync("git", ["worktree", "list"], { cwd: repo, encoding: "utf8" }).trim().split("\n").length, 1);
+    assert.equal(existsSync(join(repo, "uncommitted.txt")), true);
+    await assert.rejects(fetch(versions.after + "/"));
+  });
+
+  test("a build that fails says so, with the end of its output, and leaves nothing behind", async () => {
+    const repo = mkdtempSync(join(tmpdir(), "changereel-repo-"));
+    const git = (...args) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], { cwd: repo, stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    writeFileSync(join(repo, "a.txt"), "a");
+    git("add", "-A");
+    git("commit", "-q", "-m", "one");
+    await assert.rejects(
+      serveVersions({ cwd: repo, base: "HEAD", build: "echo no such thing >&2; exit 3", serve: "true {port}" }, () => {}),
+      /ended with 3[\s\S]*no such thing/,
+    );
+    assert.equal(execFileSync("git", ["worktree", "list"], { cwd: repo, encoding: "utf8" }).trim().split("\n").length, 1);
+    await assert.rejects(serveVersions({ cwd: repo, base: "HEAD", serve: "true" }, () => {}), /\{port\}/);
+  });
+});
+
+describe("summary", () => {
+  test("renderMarkdown lists every change, and says when nothing changed", () => {
+    const view = {};
+    const pages = [
+      { route: "/", changes: [{ type: "changed", beforeY: 1, beforeH: 2, afterY: 300, afterH: 40, layer: "content", view }], unstable: true },
+      { route: "/new", changes: [{ type: "added", page: true, beforeY: 0, beforeH: 0, afterY: 0, afterH: 900, view }] },
+      { route: "/same", changes: [] },
+    ];
+    const markdown = renderMarkdown(pages, 3);
+    assert.match(markdown, /2 visible changes on 2 of 3 pages/);
+    assert.match(markdown, /\| `\/` \| Changed \| 40 px at 300 px \|/);
+    assert.match(markdown, /\| `\/new` \| Added \| the whole page \|/);
+    assert.match(markdown, /left out/);
+    assert.match(renderMarkdown([{ route: "/", changes: [] }], 1), /No page looks different/);
   });
 });
 
