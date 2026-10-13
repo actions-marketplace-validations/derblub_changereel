@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- Narration with a model of Anthropic (`--model claude-opus-5-5`, key in `ANTHROPIC_API_KEY`), for better sentences and for where there is no local model.
+- The action narrates: inputs `narrate`, `anthropic-api-key` and `voice`.
+- A new page is described by what it is about.
+
 - Narration: a sentence is no longer cut off at a full stop inside quoted text, and a part that grew a lot is shown to the model as it is now, not next to the short part it was.
 
 ## [0.2.0] - 2026-10-13

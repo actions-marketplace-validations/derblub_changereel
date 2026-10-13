@@ -72,6 +72,7 @@ describe("narrate", () => {
     const grown = excerpts({ ...scene, box: null, beforeH: 40, afterH: 400 });
     assert.equal(grown.before, null);
     assert.equal(grown.after.height, 464);
+    assert.equal(excerpts({ ...scene, box: null, beforeH: 40, afterH: 400 }, { oneSided: false }).before.height, 104);
     const shrunk = excerpts({ ...scene, box: null, beforeH: 400, afterH: 40 });
     assert.equal(shrunk.after, null);
     const rewritten = excerpts({ ...scene, box: null, beforeH: 160, afterH: 128 });
@@ -92,6 +93,8 @@ describe("narrate", () => {
     assert.match(question({ type: "added", page: true }, { before: null, after: {} }), /top of a page that was added to/);
     assert.match(question({ type: "removed", page: true }, { before: {}, after: null }), /removed from/);
     assert.match(question({ type: "changed" }, { before: {}, after: null }), /shortened/);
+    assert.match(question({ type: "changed", beforeH: 40, afterH: 400 }, { before: {}, after: {} }), /second picture shows more: something was added/);
+    assert.match(question({ type: "changed", beforeH: 400, afterH: 40 }, { before: {}, after: {} }), /first picture shows more: something was removed/);
     assert.match(question({}, { before: {}, after: {} }, "before"), /second picture is missing in the other one: it was added/);
     assert.match(question({}, { before: {}, after: {} }, "after"), /first picture is missing in the other one: it was removed/);
   });
@@ -117,6 +120,28 @@ describe("narrate", () => {
     assert.equal(sent.url, "http://localhost:1/api/chat");
     assert.equal(sent.body.messages[0].images.length, 2);
     assert.equal(PNG.sync.read(Buffer.from(sent.body.messages[0].images[1], "base64")).height, 84);
+  });
+
+  test("a model of Anthropic gets the excerpts as pictures, and a fallback where there is one", async () => {
+    const { out, scene } = sample();
+    const sent = [];
+    const anthropic = {
+      beta: {
+        messages: {
+          create: async (body) => {
+            sent.push(body);
+            return { stop_reason: "end_turn", content: [{ type: "thinking", thinking: "" }, { type: "text", text: "The price went up. Really." }] };
+          },
+        },
+      },
+    };
+    assert.equal(await describeScene(scene, out, { model: "claude-opus-5-5", anthropic }), "The price went up.");
+    assert.deepEqual(sent[0].messages[0].content.map((block) => block.type), ["image", "image", "text"]);
+    assert.equal(sent[0].fallbacks, "default");
+    await describeScene(scene, out, { model: "claude-haiku-5-5", anthropic });
+    assert.equal("fallbacks" in sent[1], false);
+    anthropic.beta.messages.create = async () => ({ stop_reason: "refusal", content: [] });
+    await assert.rejects(describeScene(scene, out, { model: "claude-opus-5-5", anthropic }), /declined/);
   });
 
   test("a scene keeps the plain sentence when the model does not answer", async () => {

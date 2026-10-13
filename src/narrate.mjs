@@ -1,9 +1,12 @@
 /**
- * A sentence for every scene, written and spoken on this machine.
+ * A sentence for every scene, written by a model and spoken on this machine.
  *
  * A model that reads pictures gets the changed part of the page, before and after, and says
- * in one sentence what is different. It runs in Ollama, so no screenshot leaves the machine.
- * Piper then speaks the sentence into a WAV file, and the scene lasts as long as the voice.
+ * in one sentence what is different. By default it runs in Ollama, so no screenshot leaves
+ * the machine. A model named claude-… is asked at Anthropic instead: better sentences, and
+ * the only way where there is no local model, such as on a build server; the excerpts of the
+ * page are sent there. Piper then speaks the sentence into a WAV file, and the scene lasts
+ * as long as the voice.
  *
  * Neither is needed for the video. Without a voice the sentence is a caption only, and when
  * the model does not answer, the sentence is made from what the comparison knows: what kind
@@ -42,7 +45,7 @@ export function cut(png, { x, y, width, height }) {
  * `maxHeight` rows; a model scales a picture down, and a long section would be too small to
  * read.
  */
-export function excerpts(scene, { around = 32, maxHeight = 900 } = {}) {
+export function excerpts(scene, { around = 32, maxHeight = 900, oneSided = true } = {}) {
   const rect = (y, height) => {
     if (scene.box && scene.type === "changed") {
       return {
@@ -55,10 +58,10 @@ export function excerpts(scene, { around = 32, maxHeight = 900 } = {}) {
     }
     return { x: 0, y: y - around, width: scene.pageWidth, height: Math.min(height + around * 2, maxHeight) };
   };
-  // A band both sides have, but much taller on one: what makes it taller is the news, and
-  // the short side next to it would be a picture of something else
-  // (a paragraph that was rewritten and takes a line less is still shown on both sides)
-  const grown = scene.type === "changed" && !scene.box;
+  // A band both sides have, but much taller on one: what makes it taller is the news. A
+  // small model, shown the short side next to it, compares two pictures of different things;
+  // it gets the taller side only (`oneSided`). A large one tells from both what is new.
+  const grown = oneSided && scene.type === "changed" && !scene.box;
   const before = scene.before && scene.beforeH && !(grown && scene.afterH >= scene.beforeH * 2);
   const after = scene.after && scene.afterH && !(grown && scene.beforeH >= scene.afterH * 2);
   return {
@@ -104,6 +107,16 @@ export function question(scene, sides, empty) {
       `Something in the ${shown} picture is missing in the other one: it was ${kind}. What was ${kind}? ${rules} End the sentence with "was ${kind}".`
     );
   }
+  // A band both sides have, but much taller on one: what makes it taller is the news
+  if (sides.before && sides.after && scene.type === "changed" && !scene.box) {
+    const [taller, kind] = scene.afterH >= scene.beforeH * 2 ? ["second", "added"] : scene.beforeH >= scene.afterH * 2 ? ["first", "removed"] : [];
+    if (taller) {
+      return (
+        `These are two pictures of the same part of a web page: first before a change, then after it. ` +
+        `The ${taller} picture shows more: something was ${kind}, and what is in both pictures only moved. What was ${kind}? ${rules} End the sentence with "was ${kind}".`
+      );
+    }
+  }
   if (sides.before && sides.after) {
     return `These are two pictures of the same spot on a web page: first before a change, then after it. What changed on the page? ${rules}`;
   }
@@ -143,21 +156,8 @@ export function tidy(answer, limit = 160) {
   return text;
 }
 
-/** One sentence from the model for a scene; throws when Ollama does not answer. */
-export async function describe(scene, out, { model, host, fetch: request = fetch }) {
-  const sides = excerpts(scene);
-  const images = [];
-  let empty;
-  for (const which of ["before", "after"]) {
-    if (!sides[which]) continue;
-    const png = PNG.sync.read(readFileSync(join(out, scene[which])));
-    images.push(cut(png, sides[which]).toString("base64"));
-    if (scene.box && scene.type === "changed") {
-      const spot = { ...scene.box, y: scene[`${which}Y`] + scene.box.y };
-      if (isEmpty(png, spot)) empty = which;
-    }
-  }
-  if (!images.length) throw new Error("nothing to show the model");
+/** Ask a model in Ollama; the pictures stay on this machine. */
+async function askOllama(text, images, { model, host, fetch: request = fetch }) {
   const response = await request(`${host.replace(/\/$/, "")}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -165,11 +165,69 @@ export async function describe(scene, out, { model, host, fetch: request = fetch
       model,
       stream: false,
       options: { temperature: 0.2, num_predict: 80 },
-      messages: [{ role: "user", content: question(scene, sides, empty), images }],
+      messages: [{ role: "user", content: text, images: images.map((image) => image.toString("base64")) }],
     }),
   });
   if (!response.ok) throw new Error(`Ollama answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
-  const text = tidy((await response.json()).message?.content);
+  return (await response.json()).message?.content;
+}
+
+// The models that take a fallback: when one declines, the API runs the request on another
+const WITH_FALLBACK = /^claude-(opus-5|sonnet-5-5|fable-5-1)/;
+
+/** Ask Claude; the pictures go to Anthropic. The key comes from ANTHROPIC_API_KEY. */
+async function askClaude(text, images, { model, anthropic }) {
+  let client = anthropic;
+  if (!client) {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    client = new Anthropic();
+  }
+  const response = await client.beta.messages.create({
+    model,
+    max_tokens: 16000,
+    // One sentence about two small pictures: the least effort is enough
+    output_config: { effort: "low" },
+    ...(WITH_FALLBACK.test(model) ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" } : {}),
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...images.map((image) => ({
+            type: "image",
+            source: { type: "base64", media_type: "image/png", data: image.toString("base64") },
+          })),
+          { type: "text", text },
+        ],
+      },
+    ],
+  });
+  if (response.stop_reason === "refusal") throw new Error("the model declined");
+  return response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join(" ");
+}
+
+/** Whether a model is one of Anthropic's and not one in Ollama. */
+export const isHosted = (model) => /^claude-/.test(model);
+
+/** One sentence from the model for a scene; throws when the model does not answer. */
+export async function describe(scene, out, options) {
+  const sides = excerpts(scene, { oneSided: !isHosted(options.model) });
+  const images = [];
+  let empty;
+  for (const which of ["before", "after"]) {
+    if (!sides[which]) continue;
+    const png = PNG.sync.read(readFileSync(join(out, scene[which])));
+    images.push(cut(png, sides[which]));
+    if (scene.box && scene.type === "changed") {
+      const spot = { ...scene.box, y: scene[`${which}Y`] + scene.box.y };
+      if (isEmpty(png, spot)) empty = which;
+    }
+  }
+  if (!images.length) throw new Error("nothing to show the model");
+  const ask = isHosted(options.model) ? askClaude : askOllama;
+  const text = tidy(await ask(question(scene, sides, empty), images, options));
   if (!text) throw new Error("the model gave no sentence");
   return text;
 }
@@ -220,8 +278,8 @@ export async function narrate(scenes, out, options, log = console.log) {
         scene.text = await describe(scene, out, options);
       } catch (err) {
         log(`No sentence from ${options.model} for scene ${index + 1}: ${err.message}`);
-        // Not running at all: do not wait for it again on every scene
-        if (err.cause?.code === "ECONNREFUSED") asked = false;
+        // Not running at all, or no key: do not wait for it again on every scene
+        if (err.cause?.code === "ECONNREFUSED" || err.status === 401 || /apiKey|authentication/i.test(err.message)) asked = false;
       }
     }
     if (options.voice) {

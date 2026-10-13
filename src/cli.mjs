@@ -63,7 +63,7 @@ export function parseArgs(argv) {
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
     video: !argv.includes("--no-video"),
-    // A sentence per scene from a local model, spoken when there is a voice
+    // A sentence per scene from a model (local, or claude-… at Anthropic), spoken when there is a voice
     narrate: argv.includes("--narrate"),
     model: opt("model") || "gemma3:4b",
     host: opt("ollama") || process.env.OLLAMA_HOST || "http://127.0.0.1:11434",

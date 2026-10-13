@@ -44,9 +44,15 @@ jobs:
           base: HEAD~1
           serve: node serve.mjs site {port}
           title: Chairworks
+          # No key here: every scene gets the sentence that needs no model, and the voice
+          # installed on the runner has to speak it
+          narrate: claude-opus-5-5
+          voice: en_US-lessac-medium
         env:
           CHANGEREEL_CWD: ${{ runner.temp }}/shop
       - run: test "${{ steps.reel.outputs.changes }}" = 6 && test -s "${{ steps.reel.outputs.video }}"
+      - name: Every scene was spoken
+        run: test -s "$(dirname "${{ steps.reel.outputs.report }}")/audio/5.wav"
       - uses: actions/upload-artifact@v7
         with:
           name: changereel

@@ -39,6 +39,15 @@ inputs:
   ready-timeout:
     description: "Seconds to wait for a served version to answer."
     default: "120"
+  narrate:
+    description: "Model that says in one sentence what each change is, e.g. 'claude-opus-5-5'. Excerpts of the pages are sent to Anthropic. Empty leaves the sentences out."
+    default: ""
+  anthropic-api-key:
+    description: "Key for the model in 'narrate'. Pass it from a secret."
+    default: ""
+  voice:
+    description: "Piper voice that speaks the sentences, e.g. 'en_US-lessac-medium'. Empty shows them as captions only."
+    default: ""
 
 outputs:
   changes:
@@ -71,10 +80,24 @@ runs:
     - name: Install changereel
       shell: bash
       run: npm ci --omit=dev --no-audit --no-fund --prefix "$GITHUB_ACTION_PATH"
+    # The voice runs on the runner: Piper and the voice are fetched once per job
+    - name: Install the voice
+      if: inputs.narrate != '' && inputs.voice != ''
+      shell: bash
+      env:
+        IN_VOICE: ${{ inputs.voice }}
+      run: |
+        python3 -m venv "$RUNNER_TEMP/changereel-piper"
+        "$RUNNER_TEMP/changereel-piper/bin/pip" install --quiet piper-tts
+        mkdir -p "$RUNNER_TEMP/changereel-voices"
+        "$RUNNER_TEMP/changereel-piper/bin/python" -m piper.download_voices --data-dir "$RUNNER_TEMP/changereel-voices" "$IN_VOICE"
     - name: Compare
       id: reel
       shell: bash
       env:
+        IN_NARRATE: ${{ inputs.narrate }}
+        IN_VOICE: ${{ inputs.voice }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         IN_SERVE: ${{ inputs.serve }}
         IN_BUILD: ${{ inputs.build }}
         IN_BASE: ${{ inputs.base }}
@@ -97,4 +120,8 @@ runs:
         if [ -n "$IN_ROUTES" ]; then args+=(--routes "$IN_ROUTES"); fi
         if [ -n "$IN_IGNORE" ]; then args+=(--ignore "$IN_IGNORE"); fi
         if [ "$IN_VIDEO" = false ]; then args+=(--no-video); fi
+        if [ -n "$IN_NARRATE" ]; then args+=(--narrate --model "$IN_NARRATE"); fi
+        if [ -n "$IN_NARRATE" ] && [ -n "$IN_VOICE" ]; then
+          args+=(--voice "$RUNNER_TEMP/changereel-voices/$IN_VOICE.onnx" --piper "$RUNNER_TEMP/changereel-piper/bin/piper")
+        fi
         node "$GITHUB_ACTION_PATH/src/cli.mjs" "${args[@]}"

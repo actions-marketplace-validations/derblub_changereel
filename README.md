@@ -107,6 +107,9 @@ jobs:
 | `passes` | `2` | How often each page is captured. |
 | `max-scenes` | `8` | Scenes in the video. |
 | `ready-timeout` | `120` | Seconds to wait for a served version to answer. |
+| `narrate` | | Model that says in one sentence what each change is, such as `claude-opus-5-5`. See [below](#with-a-voice). |
+| `anthropic-api-key` | | Key for that model, from a secret. |
+| `voice` | | Piper voice that speaks the sentences, such as `en_US-lessac-medium`. Empty shows them as captions. |
 
 | Output | Description |
 | --- | --- |
@@ -149,19 +152,19 @@ changereel --before https://example.com --after http://localhost:3000
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |
 | `--no-video` | | Only compare and write `changes.json`. |
-| `--narrate` | | Let a local model say in one sentence what each change is. |
-| `--model` | `gemma3:4b` | The Ollama model that writes the sentences. It has to read pictures. |
+| `--narrate` | | Let a model say in one sentence what each change is. |
+| `--model` | `gemma3:4b` | The model that writes the sentences: one in Ollama that reads pictures, or `claude-…` at Anthropic. |
 | `--ollama` | `http://127.0.0.1:11434` | Where Ollama listens (or `OLLAMA_HOST`). |
 | `--voice` | | A Piper voice (`.onnx`) that speaks the sentences. Without it they are captions only. |
 | `--piper` | `piper` | The Piper command (or `CHANGEREEL_PIPER`). |
 
 You need Node 22 or newer and a Chrome or Chromium (`CHROME_PATH` when it is not in a usual place). The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
 
-## With a voice, on your own machine
+## With a voice
 
-With `--narrate`, every scene gets a sentence: "The price of the standing desk changed from 599 euros to 549 euros." A model that reads pictures writes it from the changed spot before and after, and with `--voice` it is spoken and the scene lasts as long as the sentence.
+With `--narrate`, every scene gets a sentence: "The price of the standing desk changed from 599 euros to 549 euros." A model that reads pictures writes it from the changed spot before and after, and with `--voice` it is spoken and the scene lasts as long as the sentence. The voice is [Piper](https://github.com/OHF-Voice/piper1-gpl) and always runs on the machine. For the model there are two ways.
 
-Both run locally, the model in [Ollama](https://ollama.com) and the voice in [Piper](https://github.com/OHF-Voice/piper1-gpl). No screenshot of your site is sent anywhere.
+**On your own machine**, in [Ollama](https://ollama.com). No screenshot of your site is sent anywhere.
 
 ```console
 ollama pull gemma3:4b
@@ -169,11 +172,29 @@ python3 -m piper.download_voices en_US-lessac-medium
 changereel --base main --serve "npm run preview -- --port {port}" --narrate --voice en_US-lessac-medium.onnx
 ```
 
+**At Anthropic**, with a model named `claude-…` and a key in `ANTHROPIC_API_KEY`. The excerpts of the pages that the model has to see are sent there. This is the way for a pull request, where the runner has no model:
+
+```yaml
+      - uses: derblub/changereel@v0
+        with:
+          serve: npm run preview -- --port {port}
+          narrate: claude-opus-5-5
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          voice: en_US-lessac-medium
+```
+
+How good the sentences are depends on the model. On seven changes of a real site, each sentence checked against the pictures:
+
+| Model | Where | Right | Per scene |
+| --- | --- | --- | --- |
+| `gemma3:4b` (3 GB) | local | 3 of 7 | 1.5 to 2.5 s |
+| `gemma3:12b` (8 GB) | local | 5 to 6 of 7 | 1 to 3 s |
+| `claude-haiku-5-5` | Anthropic | 6 of 7 | 1.5 to 4 s |
+| `claude-opus-5-5` | Anthropic | 7 of 7 | 2 to 4 s, about half a cent |
+
+The local times are from a graphics card with 12 GB. The small local model reads short text well, a changed price or a new label on a button, and is often wrong on a rewritten paragraph. No model is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
+
 The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing.").
-
-The default model needs about 3 GB and reads short text well: a changed price, a new label on a button. On a rewritten paragraph it is often wrong. `--model gemma3:12b` (8 GB) gets those right far more often and still answers in one to three seconds per scene on a graphics card with 12 GB. Neither is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
-
-The action does not narrate yet: the runners of GitHub have no model.
 
 ## Development
 
