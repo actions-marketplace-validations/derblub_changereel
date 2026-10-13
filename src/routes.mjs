@@ -1,0 +1,51 @@
+/** Routes to compare: from a list, or from the sitemap of the after site. */
+import { readFileSync } from "node:fs";
+
+export function parseSitemap(xml) {
+  const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]]+?)\s*(?:\]\]>)?\s*<\/loc>/g)].map((m) =>
+    m[1].replace(/&amp;/g, "&"),
+  );
+  return { index: /<sitemapindex[\s>]/.test(xml), locs };
+}
+
+export function toRoute(loc) {
+  if (loc.startsWith("/")) return loc;
+  if (!URL.canParse(loc)) return null;
+  const { pathname, search } = new URL(loc);
+  return pathname + search;
+}
+
+async function read(source) {
+  if (!/^https?:\/\//.test(source)) return readFileSync(source, "utf8");
+  const response = await fetch(source);
+  if (!response.ok) throw new Error(`${source} answered HTTP ${response.status}`);
+  return response.text();
+}
+
+/** Sorted, unique paths. Without a list, the union of both sitemaps: a new page is in one only. */
+export async function collectRoutes({ routes = [], sitemap, before, after }, reader = read) {
+  let found = routes;
+  if (!found.length) {
+    const sources = sitemap ? [sitemap] : [`${after}/sitemap.xml`, `${before}/sitemap.xml`];
+    const locs = [];
+    for (const source of sources) {
+      let first;
+      try {
+        first = parseSitemap(await reader(source));
+      } catch (err) {
+        if (sitemap || source.startsWith(after)) throw err;
+        continue; // the before site may have no sitemap yet
+      }
+      if (!first.index) locs.push(...first.locs);
+      else for (const child of first.locs) locs.push(...parseSitemap(await reader(sitemap ? child : new URL(source).origin + toRoute(child))).locs);
+    }
+    found = locs.map(toRoute).filter(Boolean);
+    if (!found.length) throw new Error("No routes found. Pass --routes or --sitemap.");
+  }
+  return [...new Set(found.map((r) => (r.startsWith("/") ? r : `/${r}`)))].sort();
+}
+
+/** A file name for a route: "/" is "index", "/docs/a?b=1" is "docs-a-b-1". */
+export function slug(route) {
+  return route.replace(/^\/+|\/+$/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "") || "index";
+}

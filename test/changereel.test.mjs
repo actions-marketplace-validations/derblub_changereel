@@ -1,0 +1,196 @@
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { after, before, describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { PNG } from "pngjs";
+import { compare, parseArgs, toScenes } from "../src/cli.mjs";
+import { alignRows, diffPages, mergeRuns, trimBlank } from "../src/diff.mjs";
+import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
+import { serve } from "./serve.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/** A white page of 100 pixels width; each band is [height, colour, optional x range]. */
+function page(...bands) {
+  const height = bands.reduce((sum, [h]) => sum + h, 0);
+  const png = new PNG({ width: 100, height });
+  png.data.fill(255);
+  let y = 0;
+  for (const [h, colour, from = 10, to = 90] of bands) {
+    if (colour) {
+      for (let row = y; row < y + h; row++) {
+        for (let x = from; x < to; x++) png.data.writeUInt32BE(colour, (row * 100 + x) * 4);
+      }
+    }
+    y += h;
+  }
+  return PNG.sync.write(png);
+}
+const RED = 0xcc0000ff;
+const BLUE = 0x0000ccff;
+const GREEN = 0x00aa00ff;
+
+describe("diff", () => {
+  test("identical pages have no changes", () => {
+    const a = page([20], [30, RED], [20]);
+    assert.deepEqual(diffPages(a, a).changes, []);
+  });
+
+  test("a new section is one added band, and what it pushed down is not a change", () => {
+    const was = page([20], [30, RED], [20], [30, BLUE], [20]);
+    const is = page([20], [30, RED], [20], [40, GREEN], [20], [30, BLUE], [20]);
+    const { changes } = diffPages(was, is);
+    assert.equal(changes.length, 1);
+    assert.deepEqual(
+      { type: changes[0].type, afterY: changes[0].afterY, afterH: changes[0].afterH, beforeH: changes[0].beforeH },
+      { type: "added", afterY: 70, afterH: 40, beforeH: 0 },
+    );
+  });
+
+  test("a section that is gone is one removed band", () => {
+    const was = page([20], [30, RED], [20], [40, GREEN], [20], [30, BLUE]);
+    const is = page([20], [30, RED], [20], [30, BLUE]);
+    const { changes } = diffPages(was, is);
+    assert.equal(changes.length, 1);
+    assert.deepEqual([changes[0].type, changes[0].beforeY, changes[0].beforeH], ["removed", 70, 40]);
+  });
+
+  test("a change in place gets the box around the pixels that differ", () => {
+    const was = page([20], [30, RED], [20]);
+    const is = page([20], [30, RED, 10, 60], [20]);
+    const { changes } = diffPages(was, is);
+    assert.equal(changes.length, 1);
+    assert.equal(changes[0].type, "changed");
+    assert.deepEqual(
+      { x: changes[0].box.x, width: changes[0].box.width, height: changes[0].box.height },
+      { x: 60, width: 30, height: 30 },
+    );
+  });
+
+  test("more or less blank space is not a change", () => {
+    const was = page([20], [30, RED], [20], [30, BLUE]);
+    const is = page([20], [30, RED], [60], [30, BLUE]);
+    assert.deepEqual(diffPages(was, is).changes, []);
+  });
+
+  test("the largest change comes first", () => {
+    const was = page([20], [30, RED], [40], [30, BLUE], [20]);
+    const is = page([20], [30, RED, 10, 20], [40], [30, GREEN], [20]);
+    const { changes } = diffPages(was, is);
+    assert.equal(changes.length, 2);
+    assert.equal(changes[0].beforeY, 90);
+  });
+
+  test("changes closer than the gap are one band", () => {
+    const was = page([20], [30, RED], [20], [30, BLUE], [20]);
+    const is = page([20], [30, RED, 10, 20], [20], [30, GREEN], [20]);
+    assert.equal(diffPages(was, is).changes.length, 1);
+    assert.equal(diffPages(was, is, { gap: 8 }).changes.length, 2);
+  });
+
+  test("pages of different widths cannot be compared", () => {
+    const narrow = PNG.sync.write(new PNG({ width: 50, height: 10 }));
+    assert.throws(() => diffPages(page([10]), narrow), /width/);
+  });
+
+  test("alignRows and mergeRuns: a replaced run is one band", () => {
+    const bands = mergeRuns(alignRows([1, 2, 3, 4, 5], [1, 9, 9, 9, 4, 5]), 0);
+    assert.deepEqual(bands, [{ type: "changed", beforeY: 1, beforeH: 2, afterY: 1, afterH: 3 }]);
+  });
+
+  test("trimBlank drops blank rows at both ends", () => {
+    const png = PNG.sync.read(page([5], [10, RED], [5]));
+    assert.deepEqual(trimBlank(png, 0, 20), { y: 5, height: 10 });
+    assert.deepEqual(trimBlank(png, 0, 5), { y: 5, height: 0 });
+  });
+});
+
+describe("routes", () => {
+  test("parseSitemap, toRoute and slug", () => {
+    assert.deepEqual(parseSitemap("<urlset><url><loc>https://a.test/x?a=1&amp;b=2</loc></url></urlset>").locs, [
+      "https://a.test/x?a=1&b=2",
+    ]);
+    assert.equal(toRoute("https://example.com/de/kontakt"), "/de/kontakt");
+    assert.equal(slug("/"), "index");
+    assert.equal(slug("/docs/a.html?b=1"), "docs-a-html-b-1");
+  });
+
+  test("without a list, the routes of both sitemaps: a new page is in one only", async () => {
+    const files = {
+      "http://after.test/sitemap.xml": "<urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/new</loc></url></urlset>",
+      "http://before.test/sitemap.xml": "<urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/gone</loc></url></urlset>",
+    };
+    const routes = await collectRoutes({ before: "http://before.test", after: "http://after.test" }, async (s) => files[s]);
+    assert.deepEqual(routes, ["/", "/gone", "/new"]);
+  });
+});
+
+describe("scenes", () => {
+  const change = (type, afterY, extra = {}) => ({ type, beforeY: afterY, beforeH: 10, afterY, afterH: 10, box: null, ...extra });
+  const site = (route, ...changes) => ({ route, before: "b.png", after: "a.png", width: 1280, beforeHeight: 800, afterHeight: 800, changes });
+
+  test("the same change on several pages is one scene, and is kept beyond the limit of a route", () => {
+    const header = change("changed", 30);
+    const scenes = toScenes(
+      [site("/", change("added", 300), change("changed", 500), header), site("/pricing", header, change("changed", 400))],
+      { perRoute: 2, maxScenes: 8 },
+    );
+    assert.deepEqual(
+      scenes.map((s) => [s.route, s.afterY, s.routes]),
+      [["/", 300, 1], ["/", 500, 1], ["/", 30, 2], ["/pricing", 400, 1]],
+    );
+  });
+
+  test("perRoute and maxScenes limit what is shown", () => {
+    const pages = [site("/", change("changed", 1), change("changed", 2), change("changed", 3)), site("/b", change("changed", 4))];
+    assert.equal(toScenes(pages, { perRoute: 1, maxScenes: 8 }).length, 2);
+    assert.equal(toScenes(pages, { perRoute: 3, maxScenes: 2 }).length, 2);
+  });
+});
+
+describe("parseArgs", () => {
+  test("defaults and errors", () => {
+    const options = parseArgs(["--before", "http://a.test/", "--after", "http://b.test"]);
+    assert.equal(options.before, "http://a.test");
+    assert.equal(options.width, 1280);
+    assert.equal(options.video, true);
+    assert.throws(() => parseArgs(["--before", "http://a.test"]), /--after/);
+  });
+});
+
+const chrome = [process.env.CHROME_PATH, "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/usr/bin/chromium"].find(
+  (path) => path && existsSync(path),
+);
+
+describe("against two real sites", { skip: !chrome && "no Chromium" }, () => {
+  let was;
+  let is;
+  before(async () => {
+    was = await serve(join(HERE, "site", "before"));
+    is = await serve(join(HERE, "site", "after"));
+  });
+  after(() => {
+    was.close();
+    is.close();
+  });
+
+  test("finds the new section, the changed button, the new link, the new price and the new page", async () => {
+    const out = mkdtempSync(join(tmpdir(), "changereel-test-"));
+    const options = parseArgs(["--before", was.url, "--after", is.url, "--out", out, "--wait", "0"]);
+    const pages = await compare(options, () => {});
+    const byRoute = Object.fromEntries(pages.map((p) => [p.route, p.changes.map((c) => c.type)]));
+    assert.deepEqual(byRoute, {
+      "/": ["added", "changed", "changed"],
+      "/about.html": [],
+      "/contact.html": ["added"],
+      "/pricing.html": ["changed", "changed"],
+    });
+    const scenes = toScenes(pages.filter((p) => p.changes.length), options);
+    assert.equal(scenes.length, 5);
+    assert.equal(scenes.find((s) => s.routes === 2).route, "/");
+    assert.ok(readFileSync(join(out, "shots", "index-after.png")).length > 1000);
+    assert.equal(existsSync(join(out, "shots", "contact-html-before.png")), false);
+  });
+});
