@@ -3,8 +3,9 @@
  *
  * The scenes are made like one screen recording of the page, with nothing of a browser
  * around it and no pointer on it: rounded corners and a soft shadow. The page is scrolled
- * to the place, the camera goes to the change on a spring, there the page changes from
- * before to after, and a frame is drawn around what differs. The recording stays through
+ * to the place and the camera goes to the change on a spring. There the page before stands
+ * still, the place marked with a dashed line, then changes to the page after, and a frame
+ * is drawn around what differs. A sign in the corner says which side it is. The recording stays through
  * all scenes. Above it a line says which scene this is, under it the sentence runs as the
  * subtitle.
  *
@@ -30,7 +31,7 @@ import { textsFor } from "../src/texts.mjs";
 
 export const FPS = 30;
 const TITLE = 105;
-const SCENE = 210;
+const SCENE = 246;
 const END = 120;
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -229,11 +230,13 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   const flick = (from, to) => interpolate(frame, [from, to], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) });
   const lead = Math.min(wanted, 520) * (1 - 0.62 * flick(10, 30) - 0.38 * flick(27, 52));
 
-  // Once the page has come to rest the camera goes to the change; there the page changes
-  // from before to after in place
+  // Once the page has come to rest the camera goes to the change. There the page before
+  // stands still for a good second, the place marked with a dashed line, so that one has
+  // seen it; then it changes to the page after in place.
   const depart = 46;
-  const change = depart + 40;
-  const after = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [change, change + 8], [0, 1], clamp);
+  const marked = depart + 34;
+  const change = both ? marked + 44 : marked;
+  const after = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [change, change + 6], [0, 1], clamp);
   const side = after >= 0.5 ? "after" : "before";
 
   // The camera goes to a small change on a spring, and comes back before the scene ends
@@ -242,7 +245,10 @@ const Scene = ({ scene, index, count, texts, previous }) => {
     spring({ frame: frame - (depart + 4), fps, config: settle }) -
     spring({ frame: frame - (length - 44), fps, config: settle });
   const zoom = 1 + (close.scale - 1) * near;
-  const drawn = interpolate(frame, [change + (both ? 6 : -12), change + (both ? 30 : 12)], [0, 1], { ...clamp, easing: reveal });
+  // On the page before, and on a part that is gone, the line is dashed: here it was. On the
+  // page after it is drawn solid, from its top left corner.
+  const dashed = interpolate(frame, [marked, marked + 12], [0, 1], clamp) * (onAfter ? 1 - after : 1);
+  const drawn = onAfter ? interpolate(frame, [change + (both ? 4 : 0), change + (both ? 28 : 24)], [0, 1], { ...clamp, easing: reveal }) : 0;
 
   const page = (which, at) => (
     <Img src={staticFile(scene[which])} style={{ position: "absolute", left: 0, top: -at * scale, width: WINDOW_W }} />
@@ -266,18 +272,6 @@ const Scene = ({ scene, index, count, texts, previous }) => {
         <span style={{ ...label, color: WHITE }}>{kind}</span>
         <span style={{ fontFamily: MONO, fontSize: 20, color: GRAY }}>{scene.route}</span>
         {scene.routes > 1 && <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 300, color: GRAY }}>{texts.more(scene.routes - 1)}</span>}
-      </div>
-      {/* Which side the recording shows */}
-      <div style={{ position: "absolute", right: WINDOW_X + count * 28 + 24, top: 30, height: 40, display: "flex", alignItems: "center", gap: 20, ...rise(frame, 0, 12) }}>
-        {[
-          ["before", texts.before, hasBefore, WHITE],
-          ["after", texts.after, hasAfter, TEAL],
-        ].map(([which, word, there, colour]) => (
-          <span key={which} style={{ position: "relative", ...label, fontSize: 16, color: side === which ? colour : GRAY, opacity: there ? 1 : 0.35, padding: "4px 0" }}>
-            {word}
-            <span style={{ position: "absolute", left: 0, right: "0.2em", bottom: -2, height: 2, background: side === which ? colour : "rgba(255,255,255,0.12)" }} />
-          </span>
-        ))}
       </div>
 
       <div
@@ -317,24 +311,28 @@ const Scene = ({ scene, index, count, texts, previous }) => {
                 </div>
               )}
             </div>
-            {/* The frame is drawn from its top left corner; a part that is gone gets a dashed one */}
             <svg style={{ position: "absolute", left: rect.left, top: rect.top + lead * scale, overflow: "visible" }} width={rect.width} height={rect.height}>
-              <rect
-                x={0}
-                y={0}
-                rx={6 / zoom}
-                width={rect.width}
-                height={rect.height}
-                fill="none"
-                stroke={onAfter ? TEAL : WHITE}
-                strokeOpacity={onAfter ? 1 : 0.7}
-                strokeWidth={3 / zoom}
-                {...(onAfter
-                  ? { pathLength: 1, strokeDasharray: 1, strokeDashoffset: 1 - drawn }
-                  : { strokeDasharray: `${10 / zoom} ${8 / zoom}`, opacity: drawn })}
-              />
+              <rect x={0} y={0} rx={6 / zoom} width={rect.width} height={rect.height} fill="none" stroke="#85858f" strokeWidth={3 / zoom} strokeDasharray={`${10 / zoom} ${8 / zoom}`} opacity={dashed} />
+              <rect x={0} y={0} rx={6 / zoom} width={rect.width} height={rect.height} fill="none" stroke={TEAL} strokeWidth={3 / zoom} pathLength={1} strokeDasharray={1} strokeDashoffset={1 - drawn} opacity={drawn > 0 ? 1 : 0} />
             </svg>
           </div>
+          {/* Which side this is, on the recording itself, where one looks */}
+          <span
+            style={{
+              position: "absolute",
+              left: 20,
+              top: 20,
+              padding: "8px 16px 8px 18px",
+              borderRadius: 8,
+              ...label,
+              fontSize: 17,
+              color: side === "after" ? INK_DEEP : WHITE,
+              background: side === "after" ? TEAL : "rgba(19,19,21,0.86)",
+              boxShadow: side === "after" ? "0 6px 20px rgba(0,0,0,0.3)" : "0 0 0 1px rgba(255,255,255,0.28), 0 6px 20px rgba(0,0,0,0.3)",
+            }}
+          >
+            {side === "after" ? texts.after : texts.before}
+          </span>
         </div>
       </div>
 
