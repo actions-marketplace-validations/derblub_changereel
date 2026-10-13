@@ -234,7 +234,8 @@ export async function describe(scene, out, options) {
   let empty;
   for (const which of ["before", "after"]) {
     if (!sides[which]) continue;
-    const png = PNG.sync.read(readFileSync(join(out, scene[which])));
+    // The model gets the picture the comparison was made on, not the larger one for showing
+    const png = PNG.sync.read(readFileSync(join(out, scene[which].replace("@2x.png", ".png"))));
     images.push(cut(png, sides[which]));
     if (scene.box && scene.type === "changed") {
       const spot = { ...scene.box, y: scene[`${which}Y`] + scene.box.y };

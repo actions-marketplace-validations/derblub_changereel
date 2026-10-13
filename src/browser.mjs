@@ -14,6 +14,8 @@ import { PNG } from "pngjs";
 const PAGE_TIMEOUT_MS = 30_000;
 /** Chromium cannot capture taller pictures in one piece; a page beyond this is cut off. */
 export const MAX_HEIGHT = 12_000;
+// Up to this height a page is also captured with twice the pixels, for the video
+const SHARP_HEIGHT = 8000;
 
 export function findChrome() {
   const candidates = [
@@ -123,7 +125,7 @@ export async function openBrowser({ wait = 500 } = {}) {
     sessionId,
   );
 
-  async function capture(url, { width = 1280, height = 800, ignore = [] } = {}) {
+  async function capture(url, { width = 1280, height = 800, ignore = [], sharp = false } = {}) {
     await cdp.send(
       "Emulation.setDeviceMetricsOverride",
       { width, height, deviceScaleFactor: 1, mobile: false },
@@ -199,10 +201,10 @@ export async function openBrowser({ wait = 500 } = {}) {
       if (exceptionDetails) throw new Error(exceptionDetails.exception?.description || exceptionDetails.text);
       return result.value;
     };
-    const shot = async (clip, beyond = false) => {
+    const shot = async (clip, beyond = false, scale = 1) => {
       const { data } = await cdp.send(
         "Page.captureScreenshot",
-        { format: "png", captureBeyondViewport: beyond, clip: { ...clip, scale: 1 } },
+        { format: "png", captureBeyondViewport: beyond, clip: { ...clip, scale } },
         sessionId,
       );
       return Buffer.from(data, "base64");
@@ -256,8 +258,10 @@ export async function openBrowser({ wait = 500 } = {}) {
     const scroller = await evaluate(place);
     let shell;
     let shown;
+    let sharpWindow;
     if (scroller) {
       shown = await shot({ x: 0, y: 0, width, height });
+      if (sharp) sharpWindow = await shot({ x: 0, y: 0, width, height }, false, 2);
       await leaveOut(true);
       shell = PNG.sync.read(await shot({ x: 0, y: 0, width, height }));
       await leaveOut(false);
@@ -271,6 +275,9 @@ export async function openBrowser({ wait = 500 } = {}) {
     const { cssContentSize } = await cdp.send("Page.getLayoutMetrics", {}, sessionId);
     const full = Math.min(Math.ceil(cssContentSize.height), MAX_HEIGHT);
     const page = await shot({ x: 0, y: 0, width, height: full }, true);
+    // For showing, the same picture with twice the pixels: a video enlarges the page and
+    // moves closer to it. Not for a very long page, whose picture would be too large to draw.
+    const sharpPage = sharp && full <= SHARP_HEIGHT ? await shot({ x: 0, y: 0, width, height: full }, true, 2) : null;
     await leaveOut(true);
     const compared = ignore.length ? await shot({ x: 0, y: 0, width, height: full }, true) : page;
     if (scroller) {
@@ -292,7 +299,7 @@ export async function openBrowser({ wait = 500 } = {}) {
     } else {
       layers.push({ name: "page", png: compared, x: 0, y: 0, shown: "page" });
     }
-    return { page, layers };
+    return { page, sharp: { page: sharpPage, window: sharpWindow ?? null }, layers };
   }
 
   /** Runs an expression in the page that was captured last. For looking into a finding. */

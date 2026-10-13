@@ -384,7 +384,8 @@ describe("against two real sites", { skip: !chrome && "no Chromium" }, () => {
     assert.equal(scenes.length, 5);
     assert.equal(scenes.find((s) => s.routes === 2).route, "/");
     assert.equal(pages.some((p) => p.unstable), false);
-    assert.equal(scenes[0].before, "shots/index-before.png");
+    assert.equal(scenes[0].before, "shots/index-before@2x.png");
+    assert.ok(readFileSync(join(out, "shots", "index-before@2x.png")).readUInt32BE(16) === 2560);
     assert.ok(readFileSync(join(out, "shots", "index-after.png")).length > 1000);
     assert.equal(existsSync(join(out, "shots", "contact-html-before.png")), false);
   });

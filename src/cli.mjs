@@ -82,7 +82,7 @@ export function parseArgs(argv) {
 async function shoot(browser, url, options) {
   let first;
   try {
-    first = await browser.capture(url, { width: options.width, ignore: options.ignore });
+    first = await browser.capture(url, { width: options.width, ignore: options.ignore, sharp: options.video });
   } catch (err) {
     // Gone or never there. Any other answer (a login, a rate limit) is not a missing page
     if (/^HTTP (404|410)$/.test(err.message)) return null;
@@ -103,6 +103,10 @@ async function shoot(browser, url, options) {
   return first;
 }
 
+/** The picture of a side that the video shows: the one with twice the pixels when there is one. */
+const shown = (name, which, suffix, side) =>
+  `shots/${name}-${which}${suffix}${side.sharp?.[suffix ? "window" : "page"] ? "@2x" : ""}.png`;
+
 /** Both sites, every route: screenshots on disk and the list of changes. */
 export async function compare(options, log = console.log) {
   const routes = await collectRoutes(options);
@@ -119,6 +123,8 @@ export async function compare(options, log = console.log) {
         sides[which] = side;
         if (!side) continue;
         writeFileSync(join(shots, `${name}-${which}.png`), side.page);
+        if (side.sharp?.page) writeFileSync(join(shots, `${name}-${which}@2x.png`), side.sharp.page);
+        if (side.sharp?.window) writeFileSync(join(shots, `${name}-${which}-window@2x.png`), side.sharp.window);
         for (const layer of side.layers) {
           if (layer.window) writeFileSync(join(shots, `${name}-${which}-window.png`), layer.window);
         }
@@ -138,8 +144,8 @@ export async function compare(options, log = console.log) {
           afterH: after ? height(there.page) : 0,
           box: null,
           view: {
-            before: before && `shots/${name}-before.png`,
-            after: after && `shots/${name}-after.png`,
+            before: before && shown(name, "before", "", before),
+            after: after && shown(name, "after", "", after),
             width: options.width,
             beforeHeight: before ? height(there.page) : 0,
             afterHeight: after ? height(there.page) : 0,
@@ -156,8 +162,8 @@ export async function compare(options, log = console.log) {
           if (was.unstable || is.unstable) page.unstable = true;
           const suffix = was.shown === "window" ? "-window" : "";
           const view = {
-            before: `shots/${name}-before${suffix}.png`,
-            after: `shots/${name}-after${suffix}.png`,
+            before: shown(name, "before", suffix, before),
+            after: shown(name, "after", suffix, after),
             width: options.width,
             beforeHeight: height(was.shown === "window" ? was.window : before.page),
             afterHeight: height(is.shown === "window" ? is.window : after.page),

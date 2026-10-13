@@ -1,10 +1,10 @@
 /**
  * The video: an opening card, one scene per change, a closing card.
  *
- * The stage keeps its place through all scenes: on the left a column that says what the
- * change is, on the right a window onto the page at its true size, under both a row of
- * cells that counts the scenes. A scene shows the page before, wipes to the page after,
- * draws a frame around what differs and, when that is small, moves closer to it.
+ * A scene is made like a screen recording: a browser window takes most of the picture, the
+ * page is scrolled to the place, a pointer goes to "After" and clicks, the page after wipes
+ * in, the pointer goes on to the change, a frame is drawn around it and the camera moves
+ * closer when it is small. The sentence runs under the window as the subtitle.
  *
  * The look is quiet on purpose, so that the page is what one looks at: dark surfaces, one
  * accent, square corners, one typeface whose weight does the work. Nothing in it is a brand.
@@ -27,7 +27,7 @@ import { textsFor } from "../src/texts.mjs";
 
 export const FPS = 30;
 const TITLE = 105;
-const SCENE = 165;
+const SCENE = 195;
 const END = 120;
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -48,12 +48,12 @@ const reveal = Easing.bezier(0.22, 1, 0.36, 1);
 const smooth = Easing.bezier(0.45, 0, 0.55, 1);
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" };
 
-// The stage: a column of text and a window of 1280 by 720, one screen pixel per page pixel
+// The stage: a browser window that takes most of the picture, and room under it for the subtitle
 const MARGIN = 80;
-const COLUMN_W = 416;
-const WINDOW_X = 560;
-const WINDOW_Y = 196;
-const WINDOW_W = 1280;
+const WINDOW_X = 240;
+const WINDOW_Y = 140;
+const WINDOW_W = 1440;
+// What the window shows of a page, in pixels of the page
 const VIEW_H = 720;
 const BAR_H = 48;
 
@@ -168,23 +168,52 @@ export function scrollFor(y, height, pageHeight) {
 }
 
 /**
- * How close the window moves to a small change: the scale, and the shift that keeps the
+ * How close the camera moves to a small change: the scale, and the shift that keeps the
  * page filling the window. A change that already takes a good part of the window stays as
  * it is.
  */
-export function closeUp(rect, width) {
-  const scale = Math.min(1.4, (width * 0.5) / rect.width, (VIEW_H * 0.5) / rect.height);
+export function closeUp(rect, width, height) {
+  const scale = Math.min(1.4, (width * 0.5) / rect.width, (height * 0.5) / rect.height);
   if (scale < 1.15) return { scale: 1, x: 0, y: 0, cx: 0, cy: 0 };
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const within = (wanted, centre, size) => Math.max(-(size - centre) * (scale - 1), Math.min(wanted, centre * (scale - 1)));
-  return { scale, cx, cy, x: within(width / 2 - cx, cx, width), y: within(VIEW_H / 2 - cy, cy, VIEW_H) };
+  return { scale, cx, cy, x: within(width / 2 - cx, cx, width), y: within(height / 2 - cy, cy, height) };
 }
 
-const Scene = ({ scene, index, texts }) => {
+/** The pointer of a screen recording, its tip at `x`, `y`; `pressed` from 0 to 1 is a click. */
+const Pointer = ({ x, y, pressed, opacity }) => (
+  <div style={{ position: "absolute", left: x, top: y, opacity, pointerEvents: "none" }}>
+    <span
+      style={{
+        position: "absolute",
+        left: -28,
+        top: -28,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        border: `2px solid ${WHITE}`,
+        opacity: pressed > 0 && pressed < 1 ? 0.7 * (1 - pressed) : 0,
+        transform: `scale(${0.3 + pressed * 0.7})`,
+      }}
+    />
+    <svg width="28" height="36" viewBox="0 0 28 36" style={{ position: "absolute", left: -3, top: -2, transform: `scale(${1 - 0.12 * Math.sin(Math.PI * pressed)})`, transformOrigin: "3px 2px", filter: "drop-shadow(0 3px 6px rgba(0,0,0,0.45))" }}>
+      <path d="M3 2 L3 27 L9.5 21 L14 32 L18.5 30 L14 19.5 L23 19.5 Z" fill={WHITE} stroke={INK_DEEP} strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  </div>
+);
+
+/** A point between two, `share` of the way, on a slight arc as a hand moves. */
+const between = (from, to, share) => {
+  const lift = Math.sin(Math.PI * share) * Math.min(60, Math.hypot(to.x - from.x, to.y - from.y) * 0.12);
+  return { x: from.x + (to.x - from.x) * share, y: from.y + (to.y - from.y) * share - lift };
+};
+
+const Scene = ({ scene, index, count, texts }) => {
   const frame = useCurrentFrame();
   const length = sceneFrames(scene);
   const scale = WINDOW_W / scene.pageWidth;
+  const windowH = VIEW_H * scale;
   const hasBefore = Boolean(scene.before);
   const hasAfter = Boolean(scene.after);
   const both = hasBefore && hasAfter;
@@ -194,20 +223,25 @@ const Scene = ({ scene, index, texts }) => {
   const wanted = onAfter
     ? scrollFor(scene.afterY, scene.afterH, scene.afterHeight)
     : scrollFor(scene.beforeY, scene.beforeH, scene.beforeHeight);
-  const beforeTop = Math.min(wanted, Math.max(0, scene.beforeHeight - VIEW_H));
-  const afterTop = Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H));
+  // As in a recording, the page is scrolled to the place: from further up, and not from so
+  // far that it races
+  const lead = Math.min(wanted, 560) * (1 - interpolate(frame, [10, 46], [0, 1], { ...clamp, easing: smooth }));
+  const beforeTop = Math.min(wanted, Math.max(0, scene.beforeHeight - VIEW_H)) - lead;
+  const afterTop = Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H)) - lead;
 
-  // 0 to 1: how far the after page has wiped in from the left
-  const wipe = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [42, 84], [0, 1], { ...clamp, easing: smooth });
-  const drawn = interpolate(frame, both ? [88, 112] : [30, 54], [0, 1], { ...clamp, easing: reveal });
+  // The beats of a scene with both sides: scroll, go to "After" and click, wipe, go to the
+  // change, frame it, move closer. With one side there is nothing to click.
+  const CLICK = 62;
+  const wipe = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [CLICK + 2, CLICK + 40], [0, 1], { ...clamp, easing: smooth });
+  const arrive = both ? [CLICK + 44, CLICK + 70] : [44, 70];
+  const drawn = interpolate(frame, [arrive[1] - 8, arrive[1] + 16], [0, 1], { ...clamp, easing: reveal });
   const out = interpolate(frame, [length - 10, length], [1, 0], clamp);
 
   // The frame goes around the changed pixels, or the whole band when a section came or went
-  const band = onAfter
-    ? { y: scene.afterY - afterTop, h: scene.afterH }
-    : { y: scene.beforeY - beforeTop, h: scene.beforeH };
+  const top = Math.min(wanted, Math.max(0, (onAfter ? scene.afterHeight : scene.beforeHeight) - VIEW_H));
+  const band = onAfter ? { y: scene.afterY - top, h: scene.afterH } : { y: scene.beforeY - top, h: scene.beforeH };
   const box = scene.box && onAfter
-    ? { x: scene.box.x, y: scene.afterY + scene.box.y - afterTop, w: scene.box.width, h: scene.box.height }
+    ? { x: scene.box.x, y: scene.afterY + scene.box.y - top, w: scene.box.width, h: scene.box.height }
     : { x: 0, y: band.y, w: scene.pageWidth, h: band.h };
   // Room around the pixels, and a least size: a changed digit is a few pixels wide
   const grow = (start, size, least, limit) => {
@@ -216,97 +250,50 @@ const Scene = ({ scene, index, texts }) => {
     return [from, Math.min(padded, limit - from)];
   };
   const [x, w] = grow(box.x, box.w, 72, scene.pageWidth);
-  const [y, h] = grow(Math.max(0, box.y), box.h, 48, VIEW_H / scale);
+  const [y, h] = grow(Math.max(0, box.y), box.h, 48, VIEW_H);
   const rect = { left: x * scale, top: y * scale, width: w * scale, height: h * scale };
 
   // Closer to a small change once it is framed, and back before the scene ends
-  const close = closeUp(rect, WINDOW_W);
+  const close = closeUp(rect, WINDOW_W, windowH);
   const near =
-    interpolate(frame, both ? [104, 140] : [48, 84], [0, 1], { ...clamp, easing: smooth }) -
+    interpolate(frame, [arrive[1] + 4, arrive[1] + 40], [0, 1], { ...clamp, easing: smooth }) -
     interpolate(frame, [length - 34, length - 12], [0, 1], { ...clamp, easing: smooth });
   const zoom = 1 + (close.scale - 1) * near;
   const line = 3 / zoom;
+  // Where a point of the window is on screen once the camera has moved
+  const seen = (point) => ({ x: (point.x - close.cx) * zoom + close.cx + close.x * near, y: (point.y - close.cy) * zoom + close.cy + close.y * near });
 
-  const page = (src, top) => (
-    <Img src={staticFile(src)} style={{ position: "absolute", left: 0, top: -top * scale, width: WINDOW_W }} />
+  // The pointer: it rests in the page, goes to "After" in the bar, clicks, and goes on to
+  // the corner of the change, where it does not cover it
+  const rest = { x: WINDOW_W * 0.58, y: windowH * 0.72 };
+  const tab = { x: WINDOW_W - 62, y: -BAR_H / 2 + 4 };
+  const corner = seen({ x: Math.min(rect.left + rect.width + 10, WINDOW_W - 24), y: Math.min(rect.top + rect.height + 8, windowH - 30) });
+  const toTab = interpolate(frame, [CLICK - 28, CLICK - 4], [0, 1], { ...clamp, easing: smooth });
+  const toChange = interpolate(frame, arrive, [0, 1], { ...clamp, easing: smooth });
+  const pointer = both
+    ? toChange > 0
+      ? between(tab, corner, toChange)
+      : between(rest, tab, toTab)
+    : between(rest, corner, toChange);
+  const pressed = both ? interpolate(frame, [CLICK - 3, CLICK + 12], [0, 1], clamp) : 0;
+
+  const page = (src, at) => (
+    <Img src={staticFile(src)} style={{ position: "absolute", left: 0, top: -at * scale, width: WINDOW_W }} />
   );
   const kind = scene.page ? texts.page(texts.kind[scene.type]) : texts.kind[scene.type];
-  const folio = String(index + 1).padStart(2, "0");
-  // The folio: its pixel rides the front of a hairline to the right as the scene opens
-  const ride = interpolate(frame, [4, 44], [0, 1], { ...clamp, easing: smooth });
-  const rule = COLUMN_W - 64;
-  // A long sentence gets a smaller size before it would leave the column
   const letters = scene.text ? scene.text.length : 0;
-  const size = letters > 150 ? 28 : letters > 105 ? 32 : 36;
+  const size = letters > 170 ? 28 : 32;
 
   return (
     <AbsoluteFill style={{ opacity: out }}>
-      <div style={{ position: "absolute", left: MARGIN, top: WINDOW_Y - BAR_H, width: COLUMN_W }}>
-        <div
-          style={{
-            position: "absolute",
-            left: -10,
-            top: 520,
-            fontFamily: SANS,
-            fontSize: 232,
-            lineHeight: 1,
-            fontWeight: 900,
-            letterSpacing: "-0.03em",
-            color: WHITE,
-            opacity: interpolate(frame, [0, 40], [0, 0.05], clamp),
-            fontVariantNumeric: "tabular-nums",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {folio}
-        </div>
-        <div style={{ position: "relative", display: "flex", alignItems: "center", height: BAR_H, opacity: interpolate(frame, [0, 10], [0, 1], clamp) }}>
-          <span style={{ ...label, fontSize: 21, width: 52, fontVariantNumeric: "tabular-nums" }}>{folio}</span>
-          <span style={{ position: "relative", width: rule, height: 12 }}>
-            <span style={{ position: "absolute", left: 0, top: 5.5, width: ride * (rule - 12), height: 1, background: "rgba(255,255,255,0.26)" }} />
-            <span style={{ position: "absolute", left: ride * (rule - 12), top: 0, width: 12, height: 12, borderRadius: 1, background: TEAL }} />
-          </span>
-        </div>
-        <h2
-          style={{
-            position: "relative",
-            fontFamily: SANS,
-            fontSize: 56,
-            lineHeight: "60px",
-            fontWeight: 600,
-            color: WHITE,
-            textTransform: "uppercase",
-            margin: "40px 0 0 -0.04em",
-            ...rise(frame, 6),
-          }}
-        >
-          {kind}
-        </h2>
-        {/* The address is in the bar of the window; here only what it cannot say */}
-        {scene.routes > 1 && (
-          <p style={{ position: "relative", fontFamily: SANS, fontSize: 24, lineHeight: "32px", fontWeight: 300, color: GRAY, margin: "16px 0 0", ...rise(frame, 10) }}>
-            <span style={{ fontFamily: MONO, fontSize: 22 }}>{scene.route}</span> {texts.more(scene.routes - 1)}
-          </p>
-        )}
-        {scene.text && (
-          <p
-            style={{
-              position: "relative",
-              fontFamily: SANS,
-              fontSize: size,
-              lineHeight: `${size + 12}px`,
-              fontWeight: 300,
-              color: WHITE,
-              margin: "40px 0 0",
-              textWrap: "pretty",
-              ...rise(frame, 16),
-            }}
-          >
-            {scene.words?.length
-              ? scene.words.map((word, index) => <Word key={index} word={word} seconds={(frame - VOICE_FROM) / FPS} />)
-              : scene.text}
-          </p>
-        )}
+      {/* What this scene is, above the window: a number, the kind of change, on how many pages */}
+      <div style={{ position: "absolute", left: WINDOW_X, top: 36, height: 40, display: "flex", alignItems: "center", gap: 20, ...rise(frame, 0, 12) }}>
+        <span style={{ ...label, fontVariantNumeric: "tabular-nums" }}>
+          {String(index + 1).padStart(2, "0")} / {String(count).padStart(2, "0")}
+        </span>
+        <span style={{ width: 10, height: 10, borderRadius: 1, background: TEAL }} />
+        <span style={{ ...label, color: WHITE }}>{kind}</span>
+        {scene.routes > 1 && <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 300, color: GRAY }}>{texts.more(scene.routes - 1)}</span>}
       </div>
 
       {/* The window: a bar with the address and a line around all of it, so that a page in
@@ -319,12 +306,18 @@ const Scene = ({ scene, index, texts }) => {
           width: WINDOW_W,
           border: `1px solid ${EDGE}`,
           boxShadow: "0 32px 96px rgba(0,0,0,0.5)",
-          ...rise(frame, 2, 32, 44),
+          ...rise(frame, 0, 20, 40),
         }}
       >
         <div style={{ height: BAR_H, display: "flex", alignItems: "center", gap: 20, padding: "0 20px", background: INK_RAISED, borderBottom: `1px solid ${EDGE}` }}>
-          <span style={{ width: 10, height: 10, borderRadius: 5, background: "rgba(255,255,255,0.26)", flex: "none" }} />
-          <span style={{ fontFamily: MONO, fontSize: 20, color: GRAY, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scene.route}</span>
+          <span style={{ display: "flex", gap: 8 }}>
+            {[0, 1, 2].map((dot) => (
+              <span key={dot} style={{ width: 11, height: 11, borderRadius: 6, background: "rgba(255,255,255,0.2)" }} />
+            ))}
+          </span>
+          <span style={{ flex: 1, height: 28, display: "flex", alignItems: "center", padding: "0 14px", background: INK_DEEP, fontFamily: MONO, fontSize: 18, color: GRAY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {scene.route}
+          </span>
           {/* Which side the window shows: the word is lit, and a line under it fills with the wipe */}
           {[
             [texts.before, hasBefore, wipe < 0.5, 1 - wipe, WHITE],
@@ -337,43 +330,70 @@ const Scene = ({ scene, index, texts }) => {
             </span>
           ))}
         </div>
-      <div style={{ position: "relative", width: WINDOW_W, height: VIEW_H, overflow: "hidden", background: INK_DEEP }}>
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            transformOrigin: `${close.cx}px ${close.cy}px`,
-            transform: `translate(${close.x * near}px, ${close.y * near}px) scale(${zoom})`,
-          }}
-        >
-          {hasBefore && page(scene.before, beforeTop)}
-          {hasAfter && (
-            <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 ${(1 - wipe) * 100}% 0 0)` }}>
-              {page(scene.after, afterTop)}
-            </div>
-          )}
-          {both && wipe > 0 && wipe < 1 && (
-            <div style={{ position: "absolute", top: 0, bottom: 0, left: `${wipe * 100}%`, width: 3, background: `linear-gradient(${TEAL}, ${CYAN})` }} />
-          )}
-          {/* The frame is drawn from its top left corner; a part that is gone gets the dashed slot */}
-          <svg style={{ position: "absolute", left: rect.left, top: rect.top, overflow: "visible" }} width={rect.width} height={rect.height}>
-            <rect
-              x={0}
-              y={0}
-              width={rect.width}
-              height={rect.height}
-              fill="none"
-              stroke={onAfter ? TEAL : WHITE}
-              strokeOpacity={onAfter ? 1 : 0.7}
-              strokeWidth={line}
-              {...(onAfter
-                ? { pathLength: 1, strokeDasharray: 1, strokeDashoffset: 1 - drawn }
-                : { strokeDasharray: `${10 / zoom} ${8 / zoom}`, opacity: drawn })}
-            />
-          </svg>
+        <div style={{ position: "relative", width: WINDOW_W, height: windowH, overflow: "hidden", background: INK_DEEP }}>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              transformOrigin: `${close.cx}px ${close.cy}px`,
+              transform: `translate(${close.x * near}px, ${close.y * near}px) scale(${zoom})`,
+            }}
+          >
+            {hasBefore && page(scene.before, beforeTop)}
+            {hasAfter && (
+              <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 ${(1 - wipe) * 100}% 0 0)` }}>
+                {page(scene.after, afterTop)}
+              </div>
+            )}
+            {both && wipe > 0 && wipe < 1 && (
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: `${wipe * 100}%`, width: 3, background: `linear-gradient(${TEAL}, ${CYAN})` }} />
+            )}
+            {/* The frame is drawn from its top left corner; a part that is gone gets a dashed one */}
+            <svg style={{ position: "absolute", left: rect.left, top: rect.top + lead * scale, overflow: "visible" }} width={rect.width} height={rect.height}>
+              <rect
+                x={0}
+                y={0}
+                width={rect.width}
+                height={rect.height}
+                fill="none"
+                stroke={onAfter ? TEAL : WHITE}
+                strokeOpacity={onAfter ? 1 : 0.7}
+                strokeWidth={line}
+                {...(onAfter
+                  ? { pathLength: 1, strokeDasharray: 1, strokeDashoffset: 1 - drawn }
+                  : { strokeDasharray: `${10 / zoom} ${8 / zoom}`, opacity: drawn })}
+              />
+            </svg>
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 0, top: BAR_H + 1 }}>
+          <Pointer x={pointer.x} y={pointer.y} pressed={pressed} opacity={interpolate(frame, [14, 26], [0, 1], clamp)} />
         </div>
       </div>
-      </div>
+
+      {/* The sentence, as the subtitle of the recording */}
+      {scene.text && (
+        <p
+          style={{
+            position: "absolute",
+            left: WINDOW_X,
+            width: WINDOW_W,
+            top: WINDOW_Y + windowH + 20,
+            height: HEIGHT - WINDOW_Y - windowH - 36,
+            margin: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            ...rise(frame, 10, 12),
+          }}
+        >
+          <span style={{ fontFamily: SANS, fontSize: size, lineHeight: `${size + 10}px`, fontWeight: 350, color: WHITE, textAlign: "center", textWrap: "balance", maxWidth: 1280 }}>
+            {scene.words?.length
+              ? scene.words.map((word, at) => <Word key={at} word={word} seconds={(frame - VOICE_FROM) / FPS} />)
+              : scene.text}
+          </span>
+        </p>
+      )}
       {scene.audio && (
         <Sequence from={VOICE_FROM}>
           <Audio src={staticFile(scene.audio)} />
@@ -383,9 +403,9 @@ const Scene = ({ scene, index, texts }) => {
   );
 };
 
-/** The row of cells under the stage: one per scene, the current one lit. */
+/** The row of cells above the window: one per scene, the current one lit. */
 const Progress = ({ count, current, within }) => (
-  <div style={{ position: "absolute", left: MARGIN, top: 980, display: "flex", gap: 8, alignItems: "center" }}>
+  <div style={{ position: "absolute", right: WIDTH - WINDOW_X - WINDOW_W, top: 46, display: "flex", gap: 8, alignItems: "center" }}>
     {Array.from({ length: count }, (_, index) => (
       <span
         key={index}
@@ -398,16 +418,7 @@ const Progress = ({ count, current, within }) => (
         }}
       >
         {index === current && (
-          <span
-            style={{
-              position: "absolute",
-              inset: 0,
-              borderRadius: 2,
-              background: TEAL,
-              opacity: interpolate(within, [0, 0.08], [0, 1], clamp),
-              boxShadow: "0 0 14px rgba(45,212,191,0.55)",
-            }}
-          />
+          <span style={{ position: "absolute", inset: 0, borderRadius: 2, background: TEAL, opacity: interpolate(within, [0, 0.08], [0, 1], clamp) }} />
         )}
       </span>
     ))}
@@ -492,13 +503,12 @@ export const Reel = ({ title, summary, scenes, language, facts = [] }) => {
       </Sequence>
       {inScenes && (
         <>
-          <div style={{ position: "absolute", left: MARGIN, top: 72, ...label, opacity: interpolate(frame, [TITLE, TITLE + 12], [0, 1], clamp) }}>{title}</div>
           <Progress count={scenes.length} current={current} within={(frame - starts[current]) / sceneFrames(scenes[current])} />
         </>
       )}
       {scenes.map((scene, index) => (
         <Sequence key={index} from={starts[index]} durationInFrames={sceneFrames(scene)}>
-          <Scene scene={scene} index={index} texts={texts} />
+          <Scene scene={scene} index={index} count={scenes.length} texts={texts} />
         </Sequence>
       ))}
       <Sequence from={at} durationInFrames={END}>

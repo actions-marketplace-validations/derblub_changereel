@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- A scene is made like a screen recording: a browser window takes most of the picture, the page scrolls to the place, a pointer clicks "After" and goes on to the change, and the sentence runs under the window as the subtitle.
+- The pages are shown with twice the pixels, so they stay sharp when the camera moves closer.
+
 - The spoken sentence follows the voice word by word.
 - The window has a bar with the address and a line around it.
 
