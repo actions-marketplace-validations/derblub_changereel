@@ -20,6 +20,7 @@ import { openBrowser } from "./browser.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
 import { narrate } from "./narrate.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
+import { TEXTS, textsFor } from "./texts.mjs";
 import { serveVersions } from "./versions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,7 @@ export function parseArgs(argv) {
     model: opt("model") || "gemma3:4b",
     host: opt("ollama") || process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
     voice: opt("voice"),
+    language: TEXTS[opt("language")] ? opt("language") : "en",
     piper: opt("piper") || process.env.CHANGEREEL_PIPER || "piper",
   };
 }
@@ -314,7 +316,8 @@ async function main() {
     }
     const props = {
       title: options.title,
-      summary: `${total} change${total === 1 ? "" : "s"} on ${changed.length} of ${pages.length} pages`,
+      summary: textsFor(options.language).summary(total, changed.length, pages.length),
+      language: options.language,
       scenes,
     };
     console.log(`Rendering ${scenes.length} scene${scenes.length === 1 ? "" : "s"} …`);

@@ -48,6 +48,9 @@ inputs:
   voice:
     description: "Piper voice that speaks the sentences, e.g. 'en_US-lessac-medium'. Empty shows them as captions only."
     default: ""
+  language:
+    description: "Language of the sentences and of the words in the video: 'en' or 'de'."
+    default: en
 
 outputs:
   changes:
@@ -97,6 +100,7 @@ runs:
       env:
         IN_NARRATE: ${{ inputs.narrate }}
         IN_VOICE: ${{ inputs.voice }}
+        IN_LANGUAGE: ${{ inputs.language }}
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
         IN_SERVE: ${{ inputs.serve }}
         IN_BUILD: ${{ inputs.build }}
@@ -115,7 +119,8 @@ runs:
           exit 2
         fi
         args=(--base "$IN_BASE" --head "$IN_HEAD" --serve "$IN_SERVE" --out "$RUNNER_TEMP/changereel-$GITHUB_ACTION"
-              --title "$IN_TITLE" --passes "$IN_PASSES" --max-scenes "$IN_MAX_SCENES" --ready-timeout "$IN_READY_TIMEOUT")
+              --title "$IN_TITLE" --passes "$IN_PASSES" --max-scenes "$IN_MAX_SCENES" --ready-timeout "$IN_READY_TIMEOUT"
+              --language "$IN_LANGUAGE")
         if [ -n "$IN_BUILD" ]; then args+=(--build "$IN_BUILD"); fi
         if [ -n "$IN_ROUTES" ]; then args+=(--routes "$IN_ROUTES"); fi
         if [ -n "$IN_IGNORE" ]; then args+=(--ignore "$IN_IGNORE"); fi

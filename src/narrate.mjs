@@ -16,15 +16,14 @@ import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { PNG } from "pngjs";
-
-const KIND = { added: "was added", removed: "was removed", changed: "changed" };
+import { textsFor } from "./texts.mjs";
 
 /** The sentence that needs no model. */
-export function plain(scene) {
-  const where =
-    scene.routes > 1 ? `on ${scene.routes} pages` : scene.route === "/" ? "on the home page" : `on ${scene.route}`;
-  if (scene.page) return `The page ${scene.route} ${KIND[scene.type]}.`;
-  return `A part of the page ${KIND[scene.type]} ${where}.`;
+export function plain(scene, language = "en") {
+  const { plain: words } = textsFor(language);
+  if (scene.page) return words.page[scene.type](scene.route);
+  const where = scene.routes > 1 ? words.onPages(scene.routes) : scene.route === "/" ? words.onHome : words.on(scene.route);
+  return `${words.part[scene.type]} ${where}.`;
 }
 
 /** A rectangle of a picture as a PNG buffer, kept inside the picture. */
@@ -86,11 +85,7 @@ export function isEmpty(png, { x, y, width, height }) {
   return true;
 }
 
-/**
- * What the model is asked, for the pictures a scene has. `empty` names the side on which the
- * changed spot is blank: then the model is told so, because it is bad at seeing it.
- */
-export function question(scene, sides, empty) {
+function ask(scene, sides, empty) {
   const rules =
     "Answer with one plain sentence of at most 18 words, in the past tense. " +
     "Name the thing itself, such as a button, a heading, a price or a section, and quote short text when text changed. " +
@@ -130,12 +125,30 @@ export function question(scene, sides, empty) {
   return `This part was removed from a web page. What was removed? ${rules} End the sentence with "was removed".`;
 }
 
+/**
+ * What the model is asked, for the pictures a scene has. `empty` names the side on which the
+ * changed spot is blank: then the model is told so, because it is bad at seeing it. In
+ * another language than English the answer cannot be told how to begin or end in English
+ * words; it is told what to say instead.
+ */
+export function question(scene, sides, empty, language = "en") {
+  const text = ask(scene, sides, empty);
+  if (textsFor(language) === textsFor("en")) return text;
+  return (
+    text
+      .replace(/ End the sentence with "was (added|removed)"\./, " Say that it was $1.")
+      .replace(/ Begin with "A page"\./, "")
+      .replace("quote short text when text changed", "quote short text from the page as it is, untranslated, when text changed") +
+    ` Write the sentence in ${textsFor(language).name}.`
+  );
+}
+
 /** The first sentence of an answer, without what models put around one. */
 export function tidy(answer, limit = 160) {
   let text = String(answer || "")
     .replace(/<think>[\s\S]*?<\/think>/g, "")
     .replace(/[*_`#]/g, "")
-    .replace(/[“”]/g, '"')
+    .replace(/[“”„]/g, '"')
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^(answer|change|summary)\s*:\s*/i, "");
@@ -226,8 +239,8 @@ export async function describe(scene, out, options) {
     }
   }
   if (!images.length) throw new Error("nothing to show the model");
-  const ask = isHosted(options.model) ? askClaude : askOllama;
-  const text = tidy(await ask(question(scene, sides, empty), images, options));
+  const send = isHosted(options.model) ? askClaude : askOllama;
+  const text = tidy(await send(question(scene, sides, empty, options.language), images, options));
   if (!text) throw new Error("the model gave no sentence");
   return text;
 }
@@ -272,7 +285,7 @@ export async function narrate(scenes, out, options, log = console.log) {
   if (options.voice) mkdirSync(join(out, "audio"), { recursive: true });
   let asked = true;
   for (const [index, scene] of scenes.entries()) {
-    scene.text = plain(scene);
+    scene.text = plain(scene, options.language);
     if (asked) {
       try {
         scene.text = await describe(scene, out, options);

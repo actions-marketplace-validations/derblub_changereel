@@ -22,6 +22,7 @@
   <a href="#what-it-leaves-out-so-that-a-change-is-a-change">What it leaves out</a> ·
   <a href="#in-a-pull-request">GitHub Action</a> ·
   <a href="#on-the-command-line">Command line</a> ·
+  <a href="#with-a-voice">Voice</a> ·
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -29,8 +30,11 @@
 
 ---
 
-> [!NOTE]
-> Early work. The comparison, the silent video and the GitHub Action work. Narration is not there yet.
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="A video made by changereel: for each of five changes the page before, a wipe to the page after, a frame around what differs and a sentence that says what changed" width="820">
+</p>
+
+<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.4.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
 A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video: the page before, a wipe to the page after, and a frame around what is different.
 
@@ -38,7 +42,7 @@ A pull request says what changed in the code. What changed on the screen, the re
 changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}"
 ```
 
-It runs on your machine. No account, no service, no model: the comparison is arithmetic on screenshots.
+It runs on your machine. No account and no service: the comparison is arithmetic on screenshots. A model is only asked when you want a [sentence and a voice](#with-a-voice) for every change, and that model can be a local one.
 
 ## How it finds a change
 
@@ -110,6 +114,7 @@ jobs:
 | `narrate` | | Model that says in one sentence what each change is, such as `claude-opus-5-5`. See [below](#with-a-voice). |
 | `anthropic-api-key` | | Key for that model, from a secret. |
 | `voice` | | Piper voice that speaks the sentences, such as `en_US-lessac-medium`. Empty shows them as captions. |
+| `language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. |
 
 | Output | Description |
 | --- | --- |
@@ -157,6 +162,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--ollama` | `http://127.0.0.1:11434` | Where Ollama listens (or `OLLAMA_HOST`). |
 | `--voice` | | A Piper voice (`.onnx`) that speaks the sentences. Without it they are captions only. |
 | `--piper` | `piper` | The Piper command (or `CHANGEREEL_PIPER`). |
+| `--language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. Take a voice of the same language. |
 
 You need Node 22 or newer and a Chrome or Chromium (`CHROME_PATH` when it is not in a usual place). The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
 
@@ -193,6 +199,8 @@ How good the sentences are depends on the model. On seven changes of a real site
 | `claude-opus-5-5` | Anthropic | 7 of 7 | 2 to 4 s, about half a cent |
 
 The local times are from a graphics card with 12 GB. The small local model reads short text well, a changed price or a new label on a button, and is often wrong on a rewritten paragraph. No model is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
+
+With `--language de` the sentences and the words in the video are German ("Geändert", "Vorher", "Nachher"); text from the page is quoted as it is. Take a voice that speaks it, such as `de_DE-thorsten-medium`.
 
 The model sees little more than the changed pixels, and is told when the spot was empty on one side; shown more of the page, it describes the neighbours. A scene it does not answer for gets a sentence without it ("A part of the page changed on /pricing.").
 

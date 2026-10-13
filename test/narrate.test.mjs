@@ -51,6 +51,16 @@ describe("narrate", () => {
     assert.equal(plain({ type: "added", route: "/contact", routes: 1, page: true }), "The page /contact was added.");
   });
 
+  test("the plain sentence and the question follow the language", () => {
+    assert.equal(plain({ type: "changed", route: "/", routes: 1 }, "de"), "Ein Teil der Seite hat sich geändert auf der Startseite.");
+    assert.equal(plain({ type: "added", route: "/kontakt", routes: 1, page: true }, "de"), "Die Seite /kontakt ist neu.");
+    assert.equal(plain({ type: "removed", route: "/", routes: 3 }, "xx"), "A part of the page was removed on 3 pages.");
+    const german = question({}, { before: null, after: {} }, undefined, "de");
+    assert.match(german, /Say that it was added\. Write the sentence in German\.$/);
+    assert.doesNotMatch(german, /End the sentence/);
+    assert.equal(question({}, { before: null, after: {} }, undefined, "xx"), question({}, { before: null, after: {} }));
+  });
+
   test("an answer is cut down to its first sentence", () => {
     assert.equal(tidy('"The button text changed from **Buy** to Order now." It is also blue.'), "The button text changed from Buy to Order now.");
     assert.equal(tidy("<think>hm</think>\nAnswer: A price went up"), "A price went up.");

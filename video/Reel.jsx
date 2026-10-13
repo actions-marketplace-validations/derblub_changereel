@@ -19,6 +19,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
+import { textsFor } from "../src/texts.mjs";
 
 export const FPS = 30;
 const TITLE = 75;
@@ -115,9 +116,7 @@ const Title = ({ title, summary }) => {
   );
 };
 
-const KIND = { added: "Added", removed: "Removed", changed: "Changed" };
-
-const Scene = ({ scene, index, count }) => {
+const Scene = ({ scene, index, count, texts }) => {
   const frame = useCurrentFrame();
   const length = sceneFrames(scene);
   const scale = WINDOW_W / scene.pageWidth;
@@ -161,19 +160,19 @@ const Scene = ({ scene, index, count }) => {
   const page = (src, top) => (
     <Img src={staticFile(src)} style={{ position: "absolute", left: 0, top: -top * scale, width: WINDOW_W }} />
   );
-  const side = wipe < 0.5 ? "Before" : "After";
+  const isAfter = wipe >= 0.5;
 
   return (
     <AbsoluteFill style={{ background: INK, opacity }}>
       <div style={{ position: "absolute", left: 160, right: 160, top: 48, height: 56, display: "flex", alignItems: "center", gap: 20 }}>
         <Pixel />
-        <span style={{ ...label, color: WHITE }}>{KIND[scene.type]}{scene.page ? " page" : ""}</span>
+        <span style={{ ...label, color: WHITE }}>{scene.page ? texts.page(texts.kind[scene.type]) : texts.kind[scene.type]}</span>
         <span style={{ fontFamily: MONO, fontSize: 24, color: GRAY }}>
           {scene.route}
-          {scene.routes > 1 ? ` and ${scene.routes - 1} more page${scene.routes > 2 ? "s" : ""}` : ""}
+          {scene.routes > 1 ? ` ${texts.more(scene.routes - 1)}` : ""}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ ...label, color: side === "After" ? TEAL : GRAY }}>{side}</span>
+        <span style={{ ...label, color: isAfter ? TEAL : GRAY }}>{isAfter ? texts.after : texts.before}</span>
         <span style={{ ...label, color: GRAY }}>{index + 1} / {count}</span>
       </div>
       <div style={{ position: "absolute", left: 160, top: 124, width: WINDOW_W, height: WINDOW_H, overflow: "hidden", background: INK_DEEP, outline: `1px solid ${INK_RAISED}` }}>
@@ -226,19 +225,20 @@ const Scene = ({ scene, index, count }) => {
   );
 };
 
-const End = ({ summary }) => {
+const End = ({ summary, texts }) => {
   const frame = useCurrentFrame();
   const opacity = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: "clamp" });
   return (
     <AbsoluteFill style={{ background: INK, justifyContent: "center", alignItems: "center", opacity }}>
       <p style={{ fontFamily: SANS, fontSize: 56, fontWeight: 600, color: WHITE, margin: 0, textTransform: "uppercase" }}>{summary}</p>
-      <p style={{ fontFamily: MONO, fontSize: 24, color: GRAY, margin: "28px 0 0" }}>made with changereel</p>
+      <p style={{ fontFamily: MONO, fontSize: 24, color: GRAY, margin: "28px 0 0" }}>{texts.madeWith}</p>
     </AbsoluteFill>
   );
 };
 
-export const Reel = ({ title, summary, scenes }) => {
+export const Reel = ({ title, summary, scenes, language }) => {
   useFonts();
+  const texts = textsFor(language);
   const starts = [];
   let at = TITLE;
   for (const scene of scenes) {
@@ -252,11 +252,11 @@ export const Reel = ({ title, summary, scenes }) => {
       </Sequence>
       {scenes.map((scene, index) => (
         <Sequence key={index} from={starts[index]} durationInFrames={sceneFrames(scene)}>
-          <Scene scene={scene} index={index} count={scenes.length} />
+          <Scene scene={scene} index={index} count={scenes.length} texts={texts} />
         </Sequence>
       ))}
       <Sequence from={at} durationInFrames={END}>
-        <End summary={summary} />
+        <End summary={summary} texts={texts} />
       </Sequence>
     </AbsoluteFill>
   );

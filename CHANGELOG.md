@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- `--language de` (input `language`): German sentences and German words in the video.
+- The README shows a video.
+
 ## [0.3.0] - 2026-10-13
 
 - Narration with a model of Anthropic (`--model claude-opus-5-5`, key in `ANTHROPIC_API_KEY`), for better sentences and for where there is no local model.
