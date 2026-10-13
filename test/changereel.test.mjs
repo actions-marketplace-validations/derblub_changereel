@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, writeFileSync } from "node:fs";
 import { compare, parseArgs, renderMarkdown, toScenes } from "../src/cli.mjs";
 import { serveVersions } from "../src/versions.mjs";
-import { alignRows, diffPages, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
+import { alignRows, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
 import { serve } from "./serve.mjs";
 
@@ -164,6 +164,21 @@ describe("noise", () => {
     const sliver = [{ x: 0, y: 300, width: 11, height: 48 }];
     const large = { beforeY: 100, beforeH: 500, afterY: 100, afterH: 700, box: { x: 0, y: 0, width: 600, height: 500 } };
     assert.equal(nearNoise(large, sliver, "after", 700), false);
+  });
+});
+
+describe("span", () => {
+  test("a new section is framed around what is drawn in it", () => {
+    const { changes } = diffPages(page([40, RED], [40]), page([40, RED], [30, BLUE, 20, 60], [40]));
+    assert.equal(changes[0].type, "added");
+    assert.deepEqual(changes[0].span, { x: 20, width: 40 });
+  });
+
+  test("rows with nothing drawn, or drawn from edge to edge, have no span", () => {
+    const empty = PNG.sync.read(page([20]));
+    assert.equal(drawnSpan(empty, 0, 20), null);
+    const full = PNG.sync.read(page([20, RED, 0, 100]));
+    assert.equal(drawnSpan(full, 0, 20), null);
   });
 });
 

@@ -199,12 +199,13 @@ export function plan(scene) {
     before: Math.min(wanted, Math.max(0, scene.beforeHeight - VIEW_H)),
     after: Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H)),
   };
-  // The frame goes around the changed pixels, or the whole band when a section came or went
+  // The frame goes around the changed pixels, or around what is drawn in a section that
+  // came or went
   const top = onAfter ? tops.after : tops.before;
   const band = onAfter ? { y: scene.afterY - top, h: scene.afterH } : { y: scene.beforeY - top, h: scene.beforeH };
   const box = scene.box && onAfter
     ? { x: scene.box.x, y: scene.afterY + scene.box.y - top, w: scene.box.width, h: scene.box.height }
-    : { x: 0, y: band.y, w: scene.pageWidth, h: band.h };
+    : { x: scene.span?.x ?? 0, y: band.y, w: scene.span?.width ?? scene.pageWidth, h: band.h };
   // Room around the pixels, and a least size: a changed digit is a few pixels wide
   const grow = (start, size, least, limit) => {
     const padded = Math.max(size + 16, least);

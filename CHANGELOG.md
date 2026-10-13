@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- A page on which a change is found is visited again on both sides before the change counts (`--confirm`, default 2). A random part that looked the same twice by chance no longer shows as a change.
+- The frame around a section that came, went or grew goes around what is drawn in it, not from edge to edge of the page.
+
 ## [0.5.0] - 2026-10-13
 
 - The video is made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, the camera goes to the change on a spring, and there the page changes from before to after. The recording stays through all scenes. Above it a line says which scene this is, under it the sentence runs as the subtitle.

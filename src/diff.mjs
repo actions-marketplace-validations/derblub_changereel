@@ -195,6 +195,31 @@ export function snapBox(png, band, box, { gap = 10, reach = 240 } = {}) {
 }
 
 /**
+ * From where to where something is drawn in a stretch of rows: the columns between the
+ * first and the last pixel that is not the colour its row begins with. A section that came
+ * or went is as wide as the page, but what is in it often is not, and a frame around the
+ * text says more than one from edge to edge. Null when the rows are empty or what is drawn
+ * reaches both edges.
+ */
+export function drawnSpan(png, y, height) {
+  let left = png.width;
+  let right = -1;
+  const end = Math.min(png.height, y + height);
+  for (let row = Math.max(0, y); row < end; row++) {
+    const start = row * png.width * 4;
+    const ground = png.data.readUInt32LE(start);
+    let x = 0;
+    while (x < left && png.data.readUInt32LE(start + x * 4) === ground) x++;
+    if (x < left) left = x;
+    x = png.width - 1;
+    while (x > right && png.data.readUInt32LE(start + x * 4) === ground) x--;
+    if (x > right) right = x;
+  }
+  if (right < left || (left === 0 && right === png.width - 1)) return null;
+  return { x: left, width: right - left + 1 };
+}
+
+/**
  * The changes between two screenshots (PNG buffers of the same width), largest first.
  * Left out are added and removed bands lower than `minHeight` rows, and bands of unchanged
  * height in which fewer than `minPixels` pixels differ.
@@ -221,7 +246,14 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
       // The box is measured over the rows both sides have. Where one side is much taller,
       // most of the change lies below them, and the band says more than the box.
       const grew = Math.abs(band.afterH - band.beforeH) > Math.max(16, Math.min(band.beforeH, band.afterH) / 4);
-      changes.push({ ...band, type: "changed", box: grew || !box ? null : snapBox(after, band, box) });
+      const whole = grew || !box;
+      const taller = band.afterH >= band.beforeH;
+      changes.push({
+        ...band,
+        type: "changed",
+        box: whole ? null : snapBox(after, band, box),
+        ...(whole ? { span: taller ? drawnSpan(after, band.afterY, band.afterH) : drawnSpan(before, band.beforeY, band.beforeH) } : {}),
+      });
     } else if (Math.max(was.height, is.height) >= minHeight) {
       changes.push({
         type: is.height ? "added" : "removed",
@@ -230,6 +262,7 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
         afterY: is.height ? is.y : band.afterY,
         afterH: is.height,
         box: null,
+        span: is.height ? drawnSpan(after, is.y, is.height) : drawnSpan(before, was.y, was.height),
       });
     }
   }

@@ -61,7 +61,7 @@ Blank rows match anywhere, so bands are judged by their other rows, and more or 
 A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages. The steps below bring that down, not to zero: a testimonial picked at random still gets through on some runs.
 
 - **It waits until the page has settled.** Parts that load when the browser is idle arrive after the load event. A page is captured when its markup and its heights have stopped moving.
-- **It visits every page more than once.** What differs between two visits of the same version, such as a random testimonial, is left out on both sides, together with what sits right next to it.
+- **It visits every page more than once.** What differs between two visits of the same version, such as a random testimonial, is left out on both sides, together with what sits right next to it. A page on which it finds a change is visited twice more on both sides: a part that is random can look the same twice by chance, and shows as what it is on another visit.
 - **It does not draw frames.** A captcha, a map or a video player belongs to someone else and loads in another state each time. Frames keep their place and stay empty.
 - **It compares an app shell and its content apart.** On a page that scrolls inside an element, next to a sidebar that stays, the window is made taller to show all of the content, and the sidebar is compared as the window shows it. Stretched to the height of the content, it would differ whenever the content got longer.
 - **It ignores a handful of pixels.** A hairline that rendered one shade off is not shown; a changed digit is.
@@ -153,6 +153,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--width` | `1280` | Width of the browser window. |
 | `--wait` | `500` | Milliseconds to wait after a page has loaded, before it is watched until it has settled. |
 | `--passes` | `2` | How often each page is captured. More visits find more of what is not stable. |
+| `--confirm` | `2` | How often both sides of a page are visited again before a change on it counts. |
 | `--noise-margin` | `64` | Rows above and below an unstable part that count as part of it. |
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |

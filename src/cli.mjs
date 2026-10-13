@@ -60,6 +60,7 @@ export function parseArgs(argv) {
     width: number("width", 1280),
     wait: number("wait", 500),
     passes: Math.max(1, number("passes", 2)),
+    confirm: number("confirm", 2),
     noiseMargin: number("noise-margin", 64),
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
@@ -89,18 +90,23 @@ async function shoot(browser, url, options) {
     throw new Error(`${url}: ${err.message}`);
   }
   for (const layer of first.layers) layer.noise = [];
-  for (let pass = 1; pass < options.passes; pass++) {
-    const again = await browser.capture(url, { width: options.width, ignore: options.ignore });
-    for (const layer of first.layers) {
-      const other = again.layers.find((l) => l.name === layer.name);
-      if (!other) continue;
-      const boxes = noiseBoxes(layer.png, other.png);
-      if (boxes.length) layer.unstable = true;
-      layer.noise.push(...boxes);
-    }
-  }
-  for (const layer of first.layers) layer.clean = paint(layer.png, layer.noise);
+  first.url = url;
+  for (const layer of first.layers) layer.clean = layer.png;
+  for (let pass = 1; pass < options.passes; pass++) await revisit(browser, first, options);
   return first;
+}
+
+/** One more visit of a side: what differs from its first capture is noise as well. */
+async function revisit(browser, side, options) {
+  const again = await browser.capture(side.url, { width: options.width, ignore: options.ignore });
+  for (const layer of side.layers) {
+    const other = again.layers.find((l) => l.name === layer.name);
+    if (!other) continue;
+    const boxes = noiseBoxes(layer.png, other.png);
+    if (boxes.length) layer.unstable = true;
+    layer.noise.push(...boxes);
+  }
+  for (const layer of side.layers) layer.clean = paint(layer.png, layer.noise);
 }
 
 /** The picture of a side that the video shows: the one with twice the pixels when there is one. */
@@ -152,40 +158,54 @@ export async function compare(options, log = console.log) {
           },
         });
       } else {
-        // A page that scrolls as a whole on one side and inside an element on the other has
-        // no layers in common: then the whole pages are compared
-        const shared = before.layers.every((layer) => after.layers.some((l) => l.name === layer.name));
-        const pairs = shared
-          ? before.layers.map((layer) => [layer, after.layers.find((l) => l.name === layer.name)])
-          : [[{ name: "page", clean: before.page, x: 0, y: 0, shown: "page" }, { name: "page", clean: after.page, x: 0, y: 0, shown: "page" }]];
-        for (const [was, is] of pairs) {
-          if (was.unstable || is.unstable) page.unstable = true;
-          const suffix = was.shown === "window" ? "-window" : "";
-          const view = {
-            before: shown(name, "before", suffix, before),
-            after: shown(name, "after", suffix, after),
-            width: options.width,
-            beforeHeight: height(was.shown === "window" ? was.window : before.page),
-            afterHeight: height(is.shown === "window" ? is.window : after.page),
-          };
-          for (const change of diffPages(was.clean, is.clean).changes) {
-            // What is left around a noisy spot after painting it over
-            const wide = height(is.clean) && is.clean.readUInt32BE(16); // IHDR: width
-            if (
-              nearNoise(change, is.noise, "after", wide, options.noiseMargin) ||
-              nearNoise(change, was.noise, "before", wide, options.noiseMargin)
-            ) {
-              continue;
+        const differences = () => {
+          const found = [];
+          // A page that scrolls as a whole on one side and inside an element on the other has
+          // no layers in common: then the whole pages are compared
+          const shared = before.layers.every((layer) => after.layers.some((l) => l.name === layer.name));
+          const pairs = shared
+            ? before.layers.map((layer) => [layer, after.layers.find((l) => l.name === layer.name)])
+            : [[{ name: "page", clean: before.page, x: 0, y: 0, shown: "page" }, { name: "page", clean: after.page, x: 0, y: 0, shown: "page" }]];
+          for (const [was, is] of pairs) {
+            if (was.unstable || is.unstable) page.unstable = true;
+            const suffix = was.shown === "window" ? "-window" : "";
+            const view = {
+              before: shown(name, "before", suffix, before),
+              after: shown(name, "after", suffix, after),
+              width: options.width,
+              beforeHeight: height(was.shown === "window" ? was.window : before.page),
+              afterHeight: height(is.shown === "window" ? is.window : after.page),
+            };
+            for (const change of diffPages(was.clean, is.clean).changes) {
+              // What is left around a noisy spot after painting it over
+              const wide = height(is.clean) && is.clean.readUInt32BE(16); // IHDR: width
+              if (
+                nearNoise(change, is.noise, "after", wide, options.noiseMargin) ||
+                nearNoise(change, was.noise, "before", wide, options.noiseMargin)
+              ) {
+                continue;
+              }
+              found.push({
+                ...change,
+                layer: was.name,
+                beforeY: change.beforeY + was.y,
+                afterY: change.afterY + is.y,
+                box: change.box && { ...change.box, x: change.box.x + is.x },
+                span: change.span && { ...change.span, x: change.span.x + is.x },
+                view,
+              });
             }
-            page.changes.push({
-              ...change,
-              layer: was.name,
-              beforeY: change.beforeY + was.y,
-              afterY: change.afterY + is.y,
-              box: change.box && { ...change.box, x: change.box.x + is.x },
-              view,
-            });
           }
+          return found;
+        };
+        page.changes = differences();
+        // A random part can look the same on two visits of one side and still differ from the
+        // other side. Before a page is said to have changed, both sides are visited again:
+        // what was chance shows up as noise then, and a change stays a change.
+        for (let round = 0; round < options.confirm && page.changes.length; round++) {
+          await revisit(browser, before, options);
+          await revisit(browser, after, options);
+          page.changes = differences();
         }
       }
       pages.push(page);
