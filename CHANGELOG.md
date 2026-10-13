@@ -4,14 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-- A scene is made like a screen recording: a browser window takes most of the picture, the page scrolls to the place, a pointer clicks "After" and goes on to the change, and the sentence runs under the window as the subtitle.
+- The scenes are made like one screen recording of the page: rounded corners and a soft shadow, the page scrolls to the place, a large pointer goes to the change and the camera follows it on a spring, and there the page changes from before to after. The recording stays through all scenes; the sentence runs under it as the subtitle.
 - The pages are shown with twice the pixels, so they stay sharp when the camera moves closer.
 
 - The spoken sentence follows the voice word by word.
-- The window has a bar with the address and a line around it.
 
 - The video has a new look: a column that says what the change is next to a window that shows the page at its true size, an opening card with the facts of the run, a closing card that lists the changes, and a row of cells that counts the scenes.
-- The window moves closer to a small change once it is framed.
 - The frame around changed pixels grows to the words they belong to, so a changed digit no longer cuts a price in two.
 - `reel.json` next to the video holds what it was rendered from.
 
