@@ -92,6 +92,10 @@ export function question(scene, sides, empty) {
     "Answer with one plain sentence of at most 18 words, in the past tense. " +
     "Name the thing itself, such as a button, a heading, a price or a section, and quote short text when text changed. " +
     "Say only what can be seen. Do not mention a picture, an image or a screenshot. No preamble.";
+  if (scene.page) {
+    const kind = sides.after ? "added to" : "removed from";
+    return `This is the top of a page that was ${kind} a website. What is the page about? ${rules} Begin with "A page".`;
+  }
   if (sides.before && sides.after && empty) {
     const kind = empty === "before" ? "added" : "removed";
     const shown = empty === "before" ? "second" : "first";

@@ -89,6 +89,8 @@ describe("narrate", () => {
     assert.match(question({}, { before: null, after: {} }), /was added/);
     assert.match(question({}, { before: {}, after: null }), /was removed/);
     assert.match(question({ type: "changed" }, { before: null, after: {} }), /grew/);
+    assert.match(question({ type: "added", page: true }, { before: null, after: {} }), /top of a page that was added to/);
+    assert.match(question({ type: "removed", page: true }, { before: {}, after: null }), /removed from/);
     assert.match(question({ type: "changed" }, { before: {}, after: null }), /shortened/);
     assert.match(question({}, { before: {}, after: {} }, "before"), /second picture is missing in the other one: it was added/);
     assert.match(question({}, { before: {}, after: {} }, "after"), /first picture is missing in the other one: it was removed/);
