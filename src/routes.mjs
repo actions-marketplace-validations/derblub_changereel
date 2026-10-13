@@ -22,11 +22,23 @@ async function read(source) {
   return response.text();
 }
 
+/** Where a site keeps its sitemap: the first "Sitemap:" line of robots.txt, else /sitemap.xml. */
+export async function findSitemap(site, reader = read) {
+  try {
+    const line = (await reader(`${site}/robots.txt`)).match(/^sitemap:\s*(\S+)/im);
+    // The path only: robots.txt names the public address, the site under test may be local
+    if (line && toRoute(line[1])) return site + toRoute(line[1]);
+  } catch {
+    // no robots.txt
+  }
+  return `${site}/sitemap.xml`;
+}
+
 /** Sorted, unique paths. Without a list, the union of both sitemaps: a new page is in one only. */
 export async function collectRoutes({ routes = [], sitemap, before, after }, reader = read) {
   let found = routes;
   if (!found.length) {
-    const sources = sitemap ? [sitemap] : [`${after}/sitemap.xml`, `${before}/sitemap.xml`];
+    const sources = sitemap ? [sitemap] : [await findSitemap(after, reader), await findSitemap(before, reader)];
     const locs = [];
     for (const source of sources) {
       let first;

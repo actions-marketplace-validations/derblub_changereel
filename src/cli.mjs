@@ -108,7 +108,13 @@ export function toScenes(pages, { perRoute, maxScenes }) {
     for (const change of page.changes) {
       const key = change.page
         ? `page ${page.route}`
-        : JSON.stringify([change.type, change.afterY, change.afterH, change.beforeH, change.box]);
+        : // Without the position down the page: a changed footer sits at another height on every page
+          JSON.stringify([
+            change.type,
+            change.afterH,
+            change.beforeH,
+            change.box ? [change.box.x, change.box.width, change.box.height] : [change.beforeY, change.afterY],
+          ]);
       const group = groups.get(key);
       if (group) {
         group.routes += 1;

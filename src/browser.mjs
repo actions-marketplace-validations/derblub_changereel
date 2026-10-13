@@ -152,6 +152,38 @@ export async function openBrowser({ wait = 500 } = {}) {
       },
       sessionId,
     );
+    // A page whose content scrolls inside an element (an app shell with a fixed sidebar) is
+    // as tall as the window, whatever it holds. Make the window taller by what that element
+    // hides, so it shows everything and the picture is the whole page.
+    const { result } = await cdp.send(
+      "Runtime.evaluate",
+      {
+        expression: `(() => {
+          let hidden = 0;
+          for (const el of document.querySelectorAll("body *")) {
+            const extra = el.scrollHeight - el.clientHeight;
+            if (extra <= hidden || el.clientWidth < innerWidth / 3) continue;
+            const overflow = getComputedStyle(el).overflowY;
+            if (overflow === "auto" || overflow === "scroll") hidden = extra;
+          }
+          return document.documentElement.scrollHeight > innerHeight ? 0 : hidden;
+        })()`,
+        returnByValue: true,
+      },
+      sessionId,
+    );
+    if (result.value > 0) {
+      await cdp.send(
+        "Emulation.setDeviceMetricsOverride",
+        { width, height: Math.min(height + result.value, MAX_HEIGHT), deviceScaleFactor: 1, mobile: false },
+        sessionId,
+      );
+      await cdp.send(
+        "Runtime.evaluate",
+        { expression: "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))", awaitPromise: true },
+        sessionId,
+      );
+    }
     const { cssContentSize } = await cdp.send("Page.getLayoutMetrics", {}, sessionId);
     const full = Math.min(Math.ceil(cssContentSize.height), MAX_HEIGHT);
     const { data } = await cdp.send(

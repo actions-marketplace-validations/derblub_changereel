@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
+import { openBrowser } from "../src/browser.mjs";
 import { compare, parseArgs, toScenes } from "../src/cli.mjs";
 import { alignRows, diffPages, mergeRuns, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
@@ -122,8 +123,25 @@ describe("routes", () => {
       "http://after.test/sitemap.xml": "<urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/new</loc></url></urlset>",
       "http://before.test/sitemap.xml": "<urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/gone</loc></url></urlset>",
     };
-    const routes = await collectRoutes({ before: "http://before.test", after: "http://after.test" }, async (s) => files[s]);
+    const reader = async (source) => {
+      if (!(source in files)) throw new Error("404");
+      return files[source];
+    };
+    const routes = await collectRoutes({ before: "http://before.test", after: "http://after.test" }, reader);
     assert.deepEqual(routes, ["/", "/gone", "/new"]);
+  });
+
+  test("robots.txt says where the sitemap is, and only its path counts", async () => {
+    const files = {
+      "http://local.test/robots.txt": "User-agent: *\nSitemap: https://example.com/sitemap_index.xml\n",
+      "http://local.test/sitemap_index.xml": "<sitemapindex><sitemap><loc>https://example.com/en.xml</loc></sitemap></sitemapindex>",
+      "http://local.test/en.xml": "<urlset><url><loc>https://example.com/about</loc></url></urlset>",
+    };
+    const reader = async (source) => {
+      if (!(source in files)) throw new Error("404");
+      return files[source];
+    };
+    assert.deepEqual(await collectRoutes({ before: "http://none.test", after: "http://local.test" }, reader), ["/about"]);
   });
 });
 
@@ -163,6 +181,21 @@ describe("parseArgs", () => {
 const chrome = [process.env.CHROME_PATH, "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/usr/bin/chromium"].find(
   (path) => path && existsSync(path),
 );
+
+describe("capture", { skip: !chrome && "no Chromium" }, () => {
+  test("a page that scrolls inside an element is captured whole", async () => {
+    const site = await serve(join(HERE, "site", "shell"));
+    const browser = await openBrowser({ wait: 0 });
+    try {
+      const png = PNG.sync.read(await browser.capture(site.url + "/", { width: 1000, height: 800 }));
+      // 40 padding, three sections of 600 with 40 below each, 40 padding
+      assert.equal(png.height, 2000);
+    } finally {
+      await browser.close();
+      site.close();
+    }
+  });
+});
 
 describe("against two real sites", { skip: !chrome && "no Chromium" }, () => {
   let was;

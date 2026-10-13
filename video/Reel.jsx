@@ -20,7 +20,7 @@ import {
 
 export const FPS = 30;
 const TITLE = 75;
-const SCENE = 135;
+const SCENE = 150;
 const END = 60;
 const WIDTH = 1920;
 const HEIGHT = 1080;
@@ -122,8 +122,8 @@ const Scene = ({ scene, index, count }) => {
   const afterTop = Math.min(wanted, Math.max(0, scene.afterHeight - VIEW_H));
 
   // 0 to 1: how far the after page has wiped in from the left
-  const wipe = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [45, 72], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease });
-  const frameIn = interpolate(frame, [hasBefore && hasAfter ? 74 : 20, hasBefore && hasAfter ? 92 : 40], [0, 1], {
+  const wipe = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [45, 87], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease });
+  const frameIn = interpolate(frame, [hasBefore && hasAfter ? 90 : 20, hasBefore && hasAfter ? 108 : 40], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: ease,
