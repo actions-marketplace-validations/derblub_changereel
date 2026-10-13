@@ -37,6 +37,8 @@ const INK_DEEP = "#131315";
 const INK_RAISED = "#27272b";
 const WHITE = "#ffffff";
 const GRAY = "#a1a1aa";
+// The line around the window: lighter than any surface of the stage
+const EDGE = "#52525b";
 const TEAL = "#2dd4bf";
 const CYAN = "#22d3ee";
 const SANS = '"Google Sans Flex", sans-serif';
@@ -256,10 +258,12 @@ const Scene = ({ scene, index, texts }) => {
         >
           {kind}
         </h2>
-        <p style={{ position: "relative", fontFamily: MONO, fontSize: 22, lineHeight: "32px", color: GRAY, margin: "16px 0 0", wordBreak: "break-all", ...rise(frame, 10) }}>
-          {scene.route}
-          {scene.routes > 1 && <span style={{ fontFamily: SANS, wordBreak: "normal" }}>{`  ${texts.more(scene.routes - 1)}`}</span>}
-        </p>
+        {/* The address is in the bar of the window; here only what it cannot say */}
+        {scene.routes > 1 && (
+          <p style={{ position: "relative", fontFamily: SANS, fontSize: 24, lineHeight: "32px", fontWeight: 300, color: GRAY, margin: "16px 0 0", ...rise(frame, 10) }}>
+            <span style={{ fontFamily: MONO, fontSize: 22 }}>{scene.route}</span> {texts.more(scene.routes - 1)}
+          </p>
+        )}
         {scene.text && (
           <p
             style={{
@@ -279,33 +283,35 @@ const Scene = ({ scene, index, texts }) => {
         )}
       </div>
 
-      <div style={{ position: "absolute", left: WINDOW_X, top: WINDOW_Y - BAR_H, width: WINDOW_W, height: BAR_H, display: "flex", alignItems: "center", gap: 20, opacity: interpolate(frame, [0, 10], [0, 1], clamp) }}>
-        <span style={{ flex: 1 }} />
-        {/* Which side the window shows: the word is lit, and a line under it fills with the wipe */}
-        {[
-          [texts.before, hasBefore, wipe < 0.5, 1 - wipe, WHITE],
-          [texts.after, hasAfter, wipe >= 0.5, wipe, TEAL],
-        ].map(([word, there, lit, share, colour]) => (
-          <span key={word} style={{ position: "relative", ...label, color: lit && there ? colour : GRAY, opacity: there ? 1 : 0.35, paddingBottom: 6 }}>
-            {word}
-            <span style={{ position: "absolute", left: 0, right: "0.2em", bottom: 0, height: 2, background: INK_RAISED }} />
-            <span style={{ position: "absolute", left: 0, bottom: 0, height: 2, width: `calc(${(there ? share : 0) * 100}% - ${share * 0.2}em)`, background: colour }} />
-          </span>
-        ))}
-      </div>
+      {/* The window: a bar with the address and a line around all of it, so that a page in
+          the colours of the stage still reads as a page and not as part of the video */}
       <div
         style={{
           position: "absolute",
-          left: WINDOW_X,
-          top: WINDOW_Y,
+          left: WINDOW_X - 1,
+          top: WINDOW_Y - BAR_H - 1,
           width: WINDOW_W,
-          height: VIEW_H,
-          overflow: "hidden",
-          background: INK_DEEP,
-          outline: `1px solid ${INK_RAISED}`,
+          border: `1px solid ${EDGE}`,
+          boxShadow: "0 32px 96px rgba(0,0,0,0.5)",
           ...rise(frame, 2, 32, 44),
         }}
       >
+        <div style={{ height: BAR_H, display: "flex", alignItems: "center", gap: 20, padding: "0 20px", background: INK_RAISED, borderBottom: `1px solid ${EDGE}` }}>
+          <span style={{ width: 10, height: 10, borderRadius: 5, background: "rgba(255,255,255,0.26)", flex: "none" }} />
+          <span style={{ fontFamily: MONO, fontSize: 20, color: GRAY, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{scene.route}</span>
+          {/* Which side the window shows: the word is lit, and a line under it fills with the wipe */}
+          {[
+            [texts.before, hasBefore, wipe < 0.5, 1 - wipe, WHITE],
+            [texts.after, hasAfter, wipe >= 0.5, wipe, TEAL],
+          ].map(([word, there, lit, share, colour]) => (
+            <span key={word} style={{ position: "relative", ...label, fontSize: 16, color: lit && there ? colour : GRAY, opacity: there ? 1 : 0.35, padding: "4px 0" }}>
+              {word}
+              <span style={{ position: "absolute", left: 0, right: "0.2em", bottom: -2, height: 2, background: "rgba(255,255,255,0.12)" }} />
+              <span style={{ position: "absolute", left: 0, bottom: -2, height: 2, width: `calc(${(there ? share : 0) * 100}% - ${share * 0.2}em)`, background: colour }} />
+            </span>
+          ))}
+        </div>
+      <div style={{ position: "relative", width: WINDOW_W, height: VIEW_H, overflow: "hidden", background: INK_DEEP }}>
         <div
           style={{
             position: "absolute",
@@ -340,6 +346,7 @@ const Scene = ({ scene, index, texts }) => {
             />
           </svg>
         </div>
+      </div>
       </div>
       {scene.audio && (
         <Sequence from={VOICE_FROM}>
