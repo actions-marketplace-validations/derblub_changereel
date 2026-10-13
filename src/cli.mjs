@@ -46,6 +46,7 @@ export function parseArgs(argv) {
     width: number("width", 1280),
     wait: number("wait", 500),
     passes: Math.max(1, number("passes", 2)),
+    noiseMargin: number("noise-margin", 64),
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
     video: !argv.includes("--no-video"),
@@ -142,7 +143,13 @@ export async function compare(options, log = console.log) {
           };
           for (const change of diffPages(was.clean, is.clean).changes) {
             // What is left around a noisy spot after painting it over
-            if (nearNoise(change, is.noise, "after") || nearNoise(change, was.noise, "before")) continue;
+            const wide = height(is.clean) && is.clean.readUInt32BE(16); // IHDR: width
+            if (
+              nearNoise(change, is.noise, "after", wide, options.noiseMargin) ||
+              nearNoise(change, was.noise, "before", wide, options.noiseMargin)
+            ) {
+              continue;
+            }
             page.changes.push({
               ...change,
               layer: was.name,

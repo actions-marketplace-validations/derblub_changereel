@@ -135,14 +135,24 @@ describe("noise", () => {
     assert.deepEqual(diffPages(paint(first, boxes), paint(second, other)).changes, []);
   });
 
-  test("nearNoise: a change in or next to a noisy spot, on the same columns", () => {
+  test("nearNoise: a change that is mostly in or next to a noisy spot", () => {
     const boxes = [{ x: 0, y: 500, width: 100, height: 50 }];
-    const change = (afterY, box = null) => ({ beforeY: afterY, beforeH: 20, afterY, afterH: 20, box });
-    assert.equal(nearNoise(change(510), boxes, "after"), true);
-    assert.equal(nearNoise(change(600), boxes, "after"), true); // 50 below, within the margin
-    assert.equal(nearNoise(change(700), boxes, "after"), false);
-    assert.equal(nearNoise(change(510, { x: 300, y: 0, width: 40, height: 20 }), boxes, "after"), false);
-    assert.equal(nearNoise(change(510), [], "after"), false);
+    const change = (afterY, afterH = 20, box = null) => ({ beforeY: afterY, beforeH: afterH, afterY, afterH, box });
+    assert.equal(nearNoise(change(510), boxes, "after", 100), true);
+    assert.equal(nearNoise(change(580), boxes, "after", 100), true); // 30 below, within the margin
+    assert.equal(nearNoise(change(700), boxes, "after", 100), false);
+    assert.equal(nearNoise(change(510, 20, { x: 300, y: 0, width: 40, height: 20 }), boxes, "after", 400), false);
+    assert.equal(nearNoise(change(510), [], "after", 100), false);
+    // Removed on the after side: only a place there, and it is inside the noisy spot
+    const removed = { beforeY: 900, beforeH: 40, afterY: 520, afterH: 0, box: null };
+    assert.equal(nearNoise(removed, boxes, "after", 100), true);
+    assert.equal(nearNoise({ ...removed, afterY: 800 }, boxes, "after", 100), false);
+  });
+
+  test("nearNoise: a large change with a hairline of noise inside it stays", () => {
+    const sliver = [{ x: 0, y: 300, width: 11, height: 48 }];
+    const large = { beforeY: 100, beforeH: 500, afterY: 100, afterH: 700, box: { x: 0, y: 0, width: 600, height: 500 } };
+    assert.equal(nearNoise(large, sliver, "after", 700), false);
   });
 });
 

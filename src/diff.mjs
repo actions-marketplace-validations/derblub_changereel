@@ -229,19 +229,29 @@ export function paint(buffer, boxes) {
 }
 
 /**
- * Whether a change sits in or right next to a noisy spot of its page. A random quote also
- * moves the line under it and the button after it; painting the quote does not cover those.
- * `side` is "before" or "after": which page the boxes belong to.
+ * Whether a change is mostly noise: at least `share` of it lies in or right next to a noisy
+ * spot of its page. A random quote also moves the line under it and the button after it;
+ * painting the quote does not cover those, so each box counts `margin` rows further up and
+ * down. A large change with a flickering hairline somewhere inside it stays a change.
+ * `side` is "before" or "after": which page the boxes belong to. `width` is the page's.
  */
-export function nearNoise(change, boxes, side, margin = 64) {
+export function nearNoise(change, boxes, side, width, margin = 64, share = 0.3) {
   if (!boxes?.length) return false;
-  const y = change[`${side}Y`] + (change.box && side === "after" ? change.box.y : 0);
-  const height = change.box && side === "after" ? change.box.height : change[`${side}H`];
-  return boxes.some(
-    (box) =>
-      y < box.y + box.height + margin &&
-      y + height > box.y - margin &&
-      // A band without a box is the full width of the page
-      (!change.box || (change.box.x < box.x + box.width && change.box.x + change.box.width > box.x)),
-  );
+  const boxed = change.box && side === "after";
+  const rect = {
+    x: boxed ? change.box.x : 0,
+    y: change[`${side}Y`] + (boxed ? change.box.y : 0),
+    width: boxed ? change.box.width : width,
+    height: boxed ? change.box.height : change[`${side}H`],
+  };
+  if (!rect.width) return false;
+  // Nothing on this side (the band was added or removed): its place is a line, in or out
+  if (!rect.height) return boxes.some((box) => rect.y >= box.y - margin && rect.y <= box.y + box.height + margin);
+  let area = 0;
+  for (const box of boxes) {
+    const w = Math.min(rect.x + rect.width, box.x + box.width) - Math.max(rect.x, box.x);
+    const h = Math.min(rect.y + rect.height, box.y + box.height + margin) - Math.max(rect.y, box.y - margin);
+    if (w > 0 && h > 0) area += w * h;
+  }
+  return area / (rect.width * rect.height) >= share;
 }

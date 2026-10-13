@@ -41,7 +41,7 @@ Blank rows match anywhere, so bands are judged by their other rows, and more or 
 
 ## What it leaves out, so that a change is a change
 
-A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages; with the steps below it reports none.
+A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages. The steps below bring that down, not to zero: a testimonial picked at random still gets through on some runs.
 
 - **It waits until the page has settled.** Parts that load when the browser is idle arrive after the load event. A page is captured when its markup and its heights have stopped moving.
 - **It visits every page more than once.** What differs between two visits of the same version, such as a random testimonial, is left out on both sides, together with what sits right next to it.
@@ -49,7 +49,7 @@ A real page is not the same picture on every visit. Compared with itself, the si
 - **It compares an app shell and its content apart.** On a page that scrolls inside an element, next to a sidebar that stays, the window is made taller to show all of the content, and the sidebar is compared as the window shows it. Stretched to the height of the content, it would differ whenever the content got longer.
 - **It ignores a handful of pixels.** A hairline that rendered one shade off is not shown; a changed digit is.
 
-The price is that a change inside or right next to an unstable part is not seen.
+The price is that a change that lies mostly inside or right next to an unstable part is not seen. `--passes` and `--noise-margin` move the line between a false alarm and a missed change.
 
 ## Usage
 
@@ -65,6 +65,7 @@ Both versions of the site have to be running: the live site and a local build, o
 | `--width` | `1280` | Width of the browser window. |
 | `--wait` | `500` | Milliseconds to wait after a page has loaded, before it is watched until it has settled. |
 | `--passes` | `2` | How often each page is captured. More visits find more of what is not stable. |
+| `--noise-margin` | `64` | Rows above and below an unstable part that count as part of it. |
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |
 | `--no-video` | | Only compare and write `changes.json`. |
