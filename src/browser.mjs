@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PNG } from "pngjs";
 
 const PAGE_TIMEOUT_MS = 30_000;
 /** Chromium cannot capture taller pictures in one piece; a page beyond this is cut off. */
@@ -78,7 +79,12 @@ function connect(url) {
   return { opened, send, once, on, close: () => ws.close() };
 }
 
-/** A browser with one tab. `capture(url, viewport)` gives the page as a PNG buffer. */
+/**
+ * A browser with one tab. `capture(url, viewport)` gives `{ page, layers }`: the whole page
+ * as a PNG buffer for showing, and the pictures to compare. A page that scrolls as a whole
+ * is one layer; a page that scrolls inside an element is a content and a shell layer, each
+ * with its place (`x`, `y`) in the picture it is shown in.
+ */
 export async function openBrowser({ wait = 500 } = {}) {
   const profileDir = mkdtempSync(join(tmpdir(), "changereel-"));
   const chrome = spawn(
@@ -143,8 +149,24 @@ export async function openBrowser({ wait = 500 } = {}) {
         expression: `(async () => {
           await document.fonts.ready;
           await new Promise((r) => setTimeout(r, ${Number(wait)}));
+          // Parts that load when the browser is idle arrive later still. The page counts as
+          // settled when its markup and its heights are the same on four looks in a row.
+          const look = () => {
+            let heights = document.documentElement.scrollHeight;
+            for (const el of document.querySelectorAll("body *")) heights += el.scrollHeight;
+            return document.documentElement.innerHTML.length + ":" + heights;
+          };
+          let last = look();
+          for (let same = 0, tries = 0; same < 4 && tries < 40; tries++) {
+            await new Promise((r) => setTimeout(r, 250));
+            const now = look();
+            same = now === last ? same + 1 : 0;
+            last = now;
+          }
           const style = document.createElement("style");
-          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; }";
+          // Frames hold what the page does not own (a captcha, a map, a video player) and
+          // load in another state on every visit: they keep their place, but are not drawn
+          style.textContent = "*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; transition: none !important; caret-color: transparent !important; } iframe { visibility: hidden !important; }";
           document.head.append(style);
           await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
         })()`,
@@ -152,50 +174,101 @@ export async function openBrowser({ wait = 500 } = {}) {
       },
       sessionId,
     );
+    const evaluate = async (expression) => {
+      const { result, exceptionDetails } = await cdp.send(
+        "Runtime.evaluate",
+        { expression, awaitPromise: true, returnByValue: true },
+        sessionId,
+      );
+      if (exceptionDetails) throw new Error(exceptionDetails.exception?.description || exceptionDetails.text);
+      return result.value;
+    };
+    const shot = async (clip, beyond = false) => {
+      const { data } = await cdp.send(
+        "Page.captureScreenshot",
+        { format: "png", captureBeyondViewport: beyond, clip: { ...clip, scale: 1 } },
+        sessionId,
+      );
+      return Buffer.from(data, "base64");
+    };
+    const settle = "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))";
+
     // A page whose content scrolls inside an element (an app shell with a fixed sidebar) is
-    // as tall as the window, whatever it holds. Make the window taller by what that element
-    // hides, so it shows everything and the picture is the whole page.
-    const { result } = await cdp.send(
-      "Runtime.evaluate",
-      {
-        expression: `(() => {
-          let hidden = 0;
-          for (const el of document.querySelectorAll("body *")) {
-            const extra = el.scrollHeight - el.clientHeight;
-            if (extra <= hidden || el.clientWidth < innerWidth / 3) continue;
-            const overflow = getComputedStyle(el).overflowY;
-            if (overflow === "auto" || overflow === "scroll") hidden = extra;
-          }
-          return document.documentElement.scrollHeight > innerHeight ? 0 : hidden;
-        })()`,
-        returnByValue: true,
-      },
-      sessionId,
-    );
-    if (result.value > 0) {
+    // as tall as the window, whatever it holds. Such a page is two layers: the shell, which
+    // is the window with the scrolling element blanked, and the content. For the content the
+    // window is made taller by what the element hides, so it shows everything at once, and
+    // the element is cut out of that picture. The sidebar in it is stretched to the height
+    // of the content and would differ whenever the content got longer; that is why the
+    // shell is compared as the window shows it.
+    //
+    // Scrolling through the element and stitching the parts would keep the window as it is,
+    // but everything that answers to the scroll position (a heading that gains weight while
+    // it passes, a card that lights up in view) would be caught at another moment on each
+    // side as soon as one side is a few pixels longer.
+    const find = `(() => {
+      if (window.__changereel) return window.__changereel;
+      if (document.documentElement.scrollHeight > innerHeight) return null;
+      let found = null;
+      let hidden = 0;
+      for (const el of document.querySelectorAll("body *")) {
+        const extra = el.scrollHeight - el.clientHeight;
+        if (extra <= hidden || el.clientWidth < innerWidth / 3) continue;
+        const overflow = getComputedStyle(el).overflowY;
+        if (overflow === "auto" || overflow === "scroll") {
+          found = el;
+          hidden = extra;
+        }
+      }
+      return (window.__changereel = found);
+    })()`;
+    const place = `(() => {
+      const el = ${find};
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + el.clientLeft),
+        y: Math.round(rect.top + el.clientTop),
+        width: el.clientWidth,
+        height: el.clientHeight,
+        full: el.scrollHeight,
+      };
+    })()`;
+
+    const layers = [];
+    const scroller = await evaluate(place);
+    let shell;
+    if (scroller) {
+      shell = PNG.sync.read(await shot({ x: 0, y: 0, width, height }));
       await cdp.send(
         "Emulation.setDeviceMetricsOverride",
-        { width, height: Math.min(height + result.value, MAX_HEIGHT), deviceScaleFactor: 1, mobile: false },
+        { width, height: Math.min(height + scroller.full - scroller.height, MAX_HEIGHT), deviceScaleFactor: 1, mobile: false },
         sessionId,
       );
-      await cdp.send(
-        "Runtime.evaluate",
-        { expression: "new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))", awaitPromise: true },
-        sessionId,
-      );
+      await evaluate(settle);
     }
     const { cssContentSize } = await cdp.send("Page.getLayoutMetrics", {}, sessionId);
     const full = Math.min(Math.ceil(cssContentSize.height), MAX_HEIGHT);
-    const { data } = await cdp.send(
-      "Page.captureScreenshot",
-      {
-        format: "png",
-        captureBeyondViewport: true,
-        clip: { x: 0, y: 0, width, height: full, scale: 1 },
-      },
-      sessionId,
-    );
-    return Buffer.from(data, "base64");
+    const page = await shot({ x: 0, y: 0, width, height: full }, true);
+    if (scroller) {
+      const grown = await evaluate(place);
+      const tall = PNG.sync.read(page);
+      const rows = Math.min(grown.height, tall.height - grown.y);
+      const content = new PNG({ width: grown.width, height: rows });
+      for (let row = 0; row < rows; row++) {
+        const from = ((grown.y + row) * tall.width + grown.x) * 4;
+        tall.data.copy(content.data, row * grown.width * 4, from, from + grown.width * 4);
+      }
+      // The shell without the content: one flat colour where the scrolling element is
+      const blank = PNG.sync.read(PNG.sync.write(shell));
+      for (let row = scroller.y; row < Math.min(scroller.y + scroller.height, height); row++) {
+        blank.data.fill(0x80, (row * width + scroller.x) * 4, (row * width + scroller.x + scroller.width) * 4);
+      }
+      layers.push({ name: "content", png: PNG.sync.write(content), x: grown.x, y: grown.y, shown: "page" });
+      layers.push({ name: "shell", png: PNG.sync.write(blank), x: 0, y: 0, shown: "window", window: PNG.sync.write(shell) });
+    } else {
+      layers.push({ name: "page", png: page, x: 0, y: 0, shown: "page" });
+    }
+    return { page, layers };
   }
 
   async function close() {

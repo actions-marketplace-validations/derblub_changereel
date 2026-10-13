@@ -39,6 +39,18 @@ A page is compared like a text file whose lines are its rows of pixels. A sectio
 
 Blank rows match anywhere, so bands are judged by their other rows, and more or less white space alone is not reported. A change that is the same on several pages, such as a new link in the header, is one scene that says on how many pages it is.
 
+## What it leaves out, so that a change is a change
+
+A real page is not the same picture on every visit. Compared with itself, the site this was tried on first reported 8 changes on 6 pages; with the steps below it reports none.
+
+- **It waits until the page has settled.** Parts that load when the browser is idle arrive after the load event. A page is captured when its markup and its heights have stopped moving.
+- **It visits every page more than once.** What differs between two visits of the same version, such as a random testimonial, is left out on both sides, together with what sits right next to it.
+- **It does not draw frames.** A captcha, a map or a video player belongs to someone else and loads in another state each time. Frames keep their place and stay empty.
+- **It compares an app shell and its content apart.** On a page that scrolls inside an element, next to a sidebar that stays, the window is made taller to show all of the content, and the sidebar is compared as the window shows it. Stretched to the height of the content, it would differ whenever the content got longer.
+- **It ignores a handful of pixels.** A hairline that rendered one shade off is not shown; a changed digit is.
+
+The price is that a change inside or right next to an unstable part is not seen.
+
 ## Usage
 
 Both versions of the site have to be running: the live site and a local build, or two builds on two ports.
@@ -51,7 +63,8 @@ Both versions of the site have to be running: the live site and a local build, o
 | `--out` | `out` | Directory for the screenshots, `changes.json` and `changereel.mp4`. |
 | `--title` | `What changed` | Title on the first card. |
 | `--width` | `1280` | Width of the browser window. |
-| `--wait` | `500` | Milliseconds to wait after a page has loaded. |
+| `--wait` | `500` | Milliseconds to wait after a page has loaded, before it is watched until it has settled. |
+| `--passes` | `2` | How often each page is captured. More visits find more of what is not stable. |
 | `--per-route` | `2` | Scenes per page, largest change first. |
 | `--max-scenes` | `8` | Scenes in the video. |
 | `--no-video` | | Only compare and write `changes.json`. |

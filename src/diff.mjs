@@ -145,10 +145,10 @@ export function changedBox(before, after, band) {
 
 /**
  * The changes between two screenshots (PNG buffers of the same width), largest first.
- * Bands lower than `minHeight` rows without a real pixel difference are left out: a row or
- * two of antialiasing is not a change anyone wants to watch.
+ * Left out are added and removed bands lower than `minHeight` rows, and bands of unchanged
+ * height in which fewer than `minPixels` pixels differ.
  */
-export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2 } = {}) {
+export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, minPixels = 40 } = {}) {
   const before = PNG.sync.read(beforeBuffer);
   const after = PNG.sync.read(afterBuffer);
   if (before.width !== after.width) {
@@ -164,6 +164,9 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2 }
       const box = changedBox(before, after, band);
       // Same height and no differing pixel: the rows only matched in another order
       if (!box && band.beforeH === band.afterH) continue;
+      // A handful of pixels in a band of the same height: a hairline that rendered one
+      // shade off, not something to show. A changed digit has more.
+      if (box && box.pixels < minPixels && band.beforeH === band.afterH) continue;
       changes.push({ ...band, type: "changed", box });
     } else if (Math.max(was.height, is.height) >= minHeight) {
       changes.push({
@@ -183,4 +186,62 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2 }
     afterHeight: after.height,
     changes: changes.sort((x, y) => weight(y) - weight(x)),
   };
+}
+
+/**
+ * What differs between two captures of the same page, as boxes in the first one: a widget
+ * that loads in another state each time, a random quote, a clock. The two are compared like
+ * two versions, so a part that is taller on one visit is found as well. Where the height
+ * differs, the box is the full width of the band: painted over, its rows are blank, and a
+ * blank stretch of another height is spacing, not a change.
+ */
+export function noiseBoxes(firstBuffer, secondBuffer, pad = 8) {
+  const { width, beforeHeight, changes } = diffPages(firstBuffer, secondBuffer, { minPixels: 1, minHeight: 1 });
+  const boxes = [];
+  for (const change of changes) {
+    if (!change.beforeH) continue; // only on the second visit: nothing to paint in the first
+    if (change.box && change.beforeH === change.afterH) {
+      const x = Math.max(0, change.box.x - pad);
+      const y = Math.max(0, change.beforeY + change.box.y - pad);
+      boxes.push({
+        x,
+        y,
+        width: Math.min(width, change.box.x + change.box.width + pad) - x,
+        height: Math.min(beforeHeight, change.beforeY + change.box.y + change.box.height + pad) - y,
+      });
+    } else {
+      boxes.push({ x: 0, y: change.beforeY, width, height: change.beforeH });
+    }
+  }
+  return boxes;
+}
+
+/** A copy of a picture with the boxes painted in one flat colour, so they compare as equal. */
+export function paint(buffer, boxes) {
+  if (!boxes?.length) return buffer;
+  const png = PNG.sync.read(buffer);
+  for (const box of boxes) {
+    for (let y = box.y; y < box.y + box.height; y++) {
+      png.data.fill(0x80, (y * png.width + box.x) * 4, (y * png.width + box.x + box.width) * 4);
+    }
+  }
+  return PNG.sync.write(png);
+}
+
+/**
+ * Whether a change sits in or right next to a noisy spot of its page. A random quote also
+ * moves the line under it and the button after it; painting the quote does not cover those.
+ * `side` is "before" or "after": which page the boxes belong to.
+ */
+export function nearNoise(change, boxes, side, margin = 64) {
+  if (!boxes?.length) return false;
+  const y = change[`${side}Y`] + (change.box && side === "after" ? change.box.y : 0);
+  const height = change.box && side === "after" ? change.box.height : change[`${side}H`];
+  return boxes.some(
+    (box) =>
+      y < box.y + box.height + margin &&
+      y + height > box.y - margin &&
+      // A band without a box is the full width of the page
+      (!change.box || (change.box.x < box.x + box.width && change.box.x + change.box.width > box.x)),
+  );
 }

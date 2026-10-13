@@ -16,7 +16,7 @@ import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
-import { diffPages } from "./diff.mjs";
+import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -45,10 +45,40 @@ export function parseArgs(argv) {
     title: opt("title") || "What changed",
     width: number("width", 1280),
     wait: number("wait", 500),
+    passes: Math.max(1, number("passes", 2)),
     maxScenes: number("max-scenes", 8),
     perRoute: number("per-route", 2),
     video: !argv.includes("--no-video"),
   };
+}
+
+/**
+ * One side of a route: its layers, each captured `passes` times. What differs between two
+ * captures of the same page is noise, and is painted over before the sides are compared.
+ * Null when the page is not there on this side.
+ */
+async function shoot(browser, url, options) {
+  let first;
+  try {
+    first = await browser.capture(url, { width: options.width });
+  } catch (err) {
+    // Gone or never there. Any other answer (a login, a rate limit) is not a missing page
+    if (/^HTTP (404|410)$/.test(err.message)) return null;
+    throw new Error(`${url}: ${err.message}`);
+  }
+  for (const layer of first.layers) layer.noise = [];
+  for (let pass = 1; pass < options.passes; pass++) {
+    const again = await browser.capture(url, { width: options.width });
+    for (const layer of first.layers) {
+      const other = again.layers.find((l) => l.name === layer.name);
+      if (!other) continue;
+      const boxes = noiseBoxes(layer.png, other.png);
+      if (boxes.length) layer.unstable = true;
+      layer.noise.push(...boxes);
+    }
+  }
+  for (const layer of first.layers) layer.clean = paint(layer.png, layer.noise);
+  return first;
 }
 
 /** Both sites, every route: screenshots on disk and the list of changes. */
@@ -61,35 +91,72 @@ export async function compare(options, log = console.log) {
   try {
     for (const route of routes) {
       const name = slug(route);
-      const side = async (which) => {
-        try {
-          const png = await browser.capture(options[which] + route, { width: options.width });
-          writeFileSync(join(shots, `${name}-${which}.png`), png);
-          return png;
-        } catch (err) {
-          if (/^HTTP 4/.test(err.message)) return null; // the page is not there on this side
-          throw new Error(`${options[which]}${route}: ${err.message}`);
+      const sides = {};
+      for (const which of ["before", "after"]) {
+        const side = await shoot(browser, options[which] + route, options);
+        sides[which] = side;
+        if (!side) continue;
+        writeFileSync(join(shots, `${name}-${which}.png`), side.page);
+        for (const layer of side.layers) {
+          if (layer.window) writeFileSync(join(shots, `${name}-${which}-window.png`), layer.window);
         }
-      };
-      const before = await side("before");
-      const after = await side("after");
-      const page = { route, before: before && `shots/${name}-before.png`, after: after && `shots/${name}-after.png` };
-      if (before && after) {
-        Object.assign(page, diffPages(before, after));
-      } else if (before || after) {
-        const height = (before || after).readUInt32BE(20); // IHDR: height
-        const whole = { beforeY: 0, beforeH: before ? height : 0, afterY: 0, afterH: after ? height : 0, box: null };
-        Object.assign(page, {
-          width: options.width,
-          beforeHeight: whole.beforeH,
-          afterHeight: whole.afterH,
-          changes: [{ type: after ? "added" : "removed", ...whole, page: true }],
+      }
+      const { before, after } = sides;
+      if (!before && !after) continue;
+      const height = (buffer) => buffer.readUInt32BE(20); // IHDR
+      const page = { route, changes: [] };
+      if (!before || !after) {
+        const there = before || after;
+        page.changes.push({
+          type: after ? "added" : "removed",
+          page: true,
+          beforeY: 0,
+          beforeH: before ? height(there.page) : 0,
+          afterY: 0,
+          afterH: after ? height(there.page) : 0,
+          box: null,
+          view: {
+            before: before && `shots/${name}-before.png`,
+            after: after && `shots/${name}-after.png`,
+            width: options.width,
+            beforeHeight: before ? height(there.page) : 0,
+            afterHeight: after ? height(there.page) : 0,
+          },
         });
       } else {
-        continue;
+        // A page that scrolls as a whole on one side and inside an element on the other has
+        // no layers in common: then the whole pages are compared
+        const shared = before.layers.every((layer) => after.layers.some((l) => l.name === layer.name));
+        const pairs = shared
+          ? before.layers.map((layer) => [layer, after.layers.find((l) => l.name === layer.name)])
+          : [[{ name: "page", clean: before.page, x: 0, y: 0, shown: "page" }, { name: "page", clean: after.page, x: 0, y: 0, shown: "page" }]];
+        for (const [was, is] of pairs) {
+          if (was.unstable || is.unstable) page.unstable = true;
+          const suffix = was.shown === "window" ? "-window" : "";
+          const view = {
+            before: `shots/${name}-before${suffix}.png`,
+            after: `shots/${name}-after${suffix}.png`,
+            width: options.width,
+            beforeHeight: height(was.shown === "window" ? was.window : before.page),
+            afterHeight: height(is.shown === "window" ? is.window : after.page),
+          };
+          for (const change of diffPages(was.clean, is.clean).changes) {
+            // What is left around a noisy spot after painting it over
+            if (nearNoise(change, is.noise, "after") || nearNoise(change, was.noise, "before")) continue;
+            page.changes.push({
+              ...change,
+              layer: was.name,
+              beforeY: change.beforeY + was.y,
+              afterY: change.afterY + is.y,
+              box: change.box && { ...change.box, x: change.box.x + is.x },
+              view,
+            });
+          }
+        }
       }
       pages.push(page);
-      log(`${page.changes.length ? "≠" : "="} ${route}${page.changes.length ? `  ${page.changes.length} change${page.changes.length > 1 ? "s" : ""}` : ""}`);
+      const count = page.changes.length;
+      log(`${count ? "≠" : "="} ${route}${count ? `  ${count} change${count > 1 ? "s" : ""}` : ""}${page.unstable ? "  (parts differ between two visits and are left out)" : ""}`);
     }
   } finally {
     await browser.close();
@@ -110,6 +177,7 @@ export function toScenes(pages, { perRoute, maxScenes }) {
         ? `page ${page.route}`
         : // Without the position down the page: a changed footer sits at another height on every page
           JSON.stringify([
+            change.layer,
             change.type,
             change.afterH,
             change.beforeH,
@@ -120,15 +188,16 @@ export function toScenes(pages, { perRoute, maxScenes }) {
         group.routes += 1;
         continue;
       }
+      const { view, ...rest } = change;
       groups.set(key, {
         route: page.route,
         routes: 1,
-        before: page.before,
-        after: page.after,
-        pageWidth: page.width,
-        beforeHeight: page.beforeHeight,
-        afterHeight: page.afterHeight,
-        ...change,
+        before: view.before,
+        after: view.after,
+        pageWidth: view.width,
+        beforeHeight: view.beforeHeight,
+        afterHeight: view.afterHeight,
+        ...rest,
       });
     }
   }

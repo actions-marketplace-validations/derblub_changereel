@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { openBrowser } from "../src/browser.mjs";
 import { compare, parseArgs, toScenes } from "../src/cli.mjs";
-import { alignRows, diffPages, mergeRuns, trimBlank } from "../src/diff.mjs";
+import { alignRows, diffPages, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
 import { collectRoutes, parseSitemap, slug, toRoute } from "../src/routes.mjs";
 import { serve } from "./serve.mjs";
 
@@ -70,6 +70,13 @@ describe("diff", () => {
     );
   });
 
+  test("a few pixels in a band of unchanged height are not a change", () => {
+    const was = page([20], [30, RED], [20]);
+    const is = page([20], [30, RED, 10, 89], [20]); // one column of 30 pixels
+    assert.deepEqual(diffPages(was, is).changes, []);
+    assert.equal(diffPages(was, is, { minPixels: 10 }).changes.length, 1);
+  });
+
   test("more or less blank space is not a change", () => {
     const was = page([20], [30, RED], [20], [30, BLUE]);
     const is = page([20], [30, RED], [60], [30, BLUE]);
@@ -105,6 +112,37 @@ describe("diff", () => {
     const png = PNG.sync.read(page([5], [10, RED], [5]));
     assert.deepEqual(trimBlank(png, 0, 20), { y: 5, height: 10 });
     assert.deepEqual(trimBlank(png, 0, 5), { y: 5, height: 0 });
+  });
+});
+
+describe("noise", () => {
+  test("what differs between two captures of one page becomes boxes, and painting them makes the captures equal", () => {
+    const first = page([40], [30, RED], [40], [30, BLUE], [40]);
+    const second = page([40], [30, RED], [40], [30, GREEN, 40, 60], [40]);
+    const boxes = noiseBoxes(first, second);
+    assert.equal(boxes.length, 1);
+    assert.ok(boxes[0].y <= 110 && boxes[0].y + boxes[0].height >= 140);
+    assert.equal(Buffer.compare(paint(first, boxes), paint(second, boxes)), 0);
+    assert.deepEqual(noiseBoxes(first, first), []);
+  });
+
+  test("a part that is taller on one visit is noise of full width, and is then only spacing", () => {
+    const first = page([40], [30, RED], [40], [30, GREEN], [40], [30, BLUE], [40]);
+    const second = page([40], [30, RED], [40], [70, GREEN, 30, 50], [40], [30, BLUE], [40]);
+    const boxes = noiseBoxes(first, second);
+    assert.deepEqual(boxes, [{ x: 0, y: 110, width: 100, height: 30 }]);
+    const other = noiseBoxes(second, first);
+    assert.deepEqual(diffPages(paint(first, boxes), paint(second, other)).changes, []);
+  });
+
+  test("nearNoise: a change in or next to a noisy spot, on the same columns", () => {
+    const boxes = [{ x: 0, y: 500, width: 100, height: 50 }];
+    const change = (afterY, box = null) => ({ beforeY: afterY, beforeH: 20, afterY, afterH: 20, box });
+    assert.equal(nearNoise(change(510), boxes, "after"), true);
+    assert.equal(nearNoise(change(600), boxes, "after"), true); // 50 below, within the margin
+    assert.equal(nearNoise(change(700), boxes, "after"), false);
+    assert.equal(nearNoise(change(510, { x: 300, y: 0, width: 40, height: 20 }), boxes, "after"), false);
+    assert.equal(nearNoise(change(510), [], "after"), false);
   });
 });
 
@@ -146,11 +184,12 @@ describe("routes", () => {
 });
 
 describe("scenes", () => {
-  const change = (type, afterY, extra = {}) => ({ type, beforeY: afterY, beforeH: 10, afterY, afterH: 10, box: null, ...extra });
-  const site = (route, ...changes) => ({ route, before: "b.png", after: "a.png", width: 1280, beforeHeight: 800, afterHeight: 800, changes });
+  const view = { before: "b.png", after: "a.png", width: 1280, beforeHeight: 800, afterHeight: 800 };
+  const change = (type, afterY, extra = {}) => ({ type, beforeY: afterY, beforeH: 10, afterY, afterH: 10, box: null, view, ...extra });
+  const site = (route, ...changes) => ({ route, changes });
 
   test("the same change on several pages is one scene, and is kept beyond the limit of a route", () => {
-    const header = change("changed", 30);
+    const header = change("changed", 30, { box: { x: 300, y: 0, width: 60, height: 10 } });
     const scenes = toScenes(
       [site("/", change("added", 300), change("changed", 500), header), site("/pricing", header, change("changed", 400))],
       { perRoute: 2, maxScenes: 8 },
@@ -159,6 +198,8 @@ describe("scenes", () => {
       scenes.map((s) => [s.route, s.afterY, s.routes]),
       [["/", 300, 1], ["/", 500, 1], ["/", 30, 2], ["/pricing", 400, 1]],
     );
+    assert.equal(scenes[0].before, "b.png");
+    assert.equal(scenes[0].pageWidth, 1280);
   });
 
   test("perRoute and maxScenes limit what is shown", () => {
@@ -187,9 +228,21 @@ describe("capture", { skip: !chrome && "no Chromium" }, () => {
     const site = await serve(join(HERE, "site", "shell"));
     const browser = await openBrowser({ wait: 0 });
     try {
-      const png = PNG.sync.read(await browser.capture(site.url + "/", { width: 1000, height: 800 }));
+      const { page, layers } = await browser.capture(site.url + "/", { width: 1000, height: 800 });
       // 40 padding, three sections of 600 with 40 below each, 40 padding
-      assert.equal(png.height, 2000);
+      assert.equal(PNG.sync.read(page).height, 2000);
+      const content = layers.find((layer) => layer.name === "content");
+      const shell = layers.find((layer) => layer.name === "shell");
+      assert.deepEqual([content.x, content.y], [240, 0]);
+      const cut = PNG.sync.read(content.png);
+      assert.deepEqual([cut.width, cut.height], [760, 2000]);
+      // The third section starts at 40 + 2 * 640, far below the window of 800
+      assert.equal(cut.data.readUInt32BE((1400 * 760 + 100) * 4), 0xf4f4f5ff);
+      // The shell is the window with the content blanked: the sidebar is still there
+      const window = PNG.sync.read(shell.png);
+      assert.deepEqual([window.width, window.height], [1000, 800]);
+      assert.equal(window.data.readUInt32BE((400 * 1000 + 600) * 4), 0x80808080);
+      assert.equal(window.data.readUInt32BE((400 * 1000 + 100) * 4), 0x18181bff);
     } finally {
       await browser.close();
       site.close();
@@ -223,6 +276,8 @@ describe("against two real sites", { skip: !chrome && "no Chromium" }, () => {
     const scenes = toScenes(pages.filter((p) => p.changes.length), options);
     assert.equal(scenes.length, 5);
     assert.equal(scenes.find((s) => s.routes === 2).route, "/");
+    assert.equal(pages.some((p) => p.unstable), false);
+    assert.equal(scenes[0].before, "shots/index-before.png");
     assert.ok(readFileSync(join(out, "shots", "index-after.png")).length > 1000);
     assert.equal(existsSync(join(out, "shots", "contact-html-before.png")), false);
   });
