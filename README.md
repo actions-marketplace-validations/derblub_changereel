@@ -34,7 +34,7 @@
   <img src="docs/assets/demo.gif" alt="A video made by changereel: for each of five changes the page scrolls to the place, the camera moves closer, the page changes from before to after while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
 </p>
 
-<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.6.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
+<p align="center"><sub>The two sample sites of the tests, compared. <a href="https://github.com/derblub/changereel/releases/download/v0.6.1/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
 A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, the page changes from before to after, and a frame is drawn around what is different.
 

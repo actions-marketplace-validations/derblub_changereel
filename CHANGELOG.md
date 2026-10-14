@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-14
+
 - A closed pull request gets its previews taken off the branch `changereel-previews`; the action does that when it runs on `closed`.
 - When one side of a page is shorter, both stand at its scroll as long as the change stays in view, so the page no longer jumps when it changes.
 
@@ -62,7 +64,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/derblub/changereel/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/derblub/changereel/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/derblub/changereel/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/derblub/changereel/compare/v0.5.0...v0.5.1
