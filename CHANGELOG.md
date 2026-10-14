@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-14
+
+- The action is named "changereel visual diff" in the GitHub Marketplace, where "changereel" is taken by an account. `uses: derblub/changereel@v0` stays as it is.
+
 ## [0.8.0] - 2026-10-14
 
 - The change happens as it would on the page. A section that came opens at its place and pushes what is below it down, or the page above it up when the page before could not be scrolled that far; a section that went folds shut. A link put into a menu makes the links beside it move aside and comes out from behind them. A place that changed is wiped over from left to right. Another page pushes the one before out of the recording sideways.
@@ -100,7 +104,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/derblub/changereel/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/derblub/changereel/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/derblub/changereel/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/derblub/changereel/compare/v0.7.1...v0.7.2

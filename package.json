@@ -1,6 +1,6 @@
 {
   "name": "changereel",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Find what a change did to the pages of a site and show it as a before and after video.",
   "keywords": [
     "visual-regression",

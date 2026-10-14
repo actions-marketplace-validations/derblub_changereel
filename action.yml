@@ -1,4 +1,4 @@
-name: changereel
+name: changereel visual diff
 author: Daniel Kurdoghlian, Pushing Pixels
 description: Find what a pull request changed on the pages of your site and show it as a before and after video.
 branding:
