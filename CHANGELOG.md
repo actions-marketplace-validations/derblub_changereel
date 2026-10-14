@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-14
+
 - `--before-label` and `--after-label` name the two versions on the opening card.
 - The sign that says which side is shown sits at the bottom left of the recording, where it covers no logo, and the page around a change is dimmed less.
 - A new demo: a sample coffee roastery in `docs/demo`, narrated.
@@ -83,7 +85,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/derblub/changereel/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/derblub/changereel/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/derblub/changereel/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/derblub/changereel/compare/v0.6.1...v0.6.2
