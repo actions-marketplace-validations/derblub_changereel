@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-14
+
 - The page before stands still for a good second once the camera is there, before it changes to the page after. A sign in the corner of the recording says which side it is.
 - The place is marked on both sides, each measured on its own page, and the mark moves and grows from the one into the other: dashed around what was, hatched where there is nothing yet or nothing any more, solid in the accent around what is now. The page around it is dimmed a little, and what is new lights up as it comes.
 - A page on which a change is found is visited again on both sides before the change counts (`--confirm`, default 2). A random part that looked the same twice by chance no longer shows as a change.
@@ -43,7 +45,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/derblub/changereel/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/derblub/changereel/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/derblub/changereel/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/derblub/changereel/compare/v0.2.0...v0.3.0
