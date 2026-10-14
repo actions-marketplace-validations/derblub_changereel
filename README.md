@@ -32,12 +32,12 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/demo.gif" alt="A video made by changereel for a sample coffee roastery: for each of five changes the page scrolls to the place, the camera moves closer, the page changes from before to after while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
+  <img src="docs/assets/demo.gif" alt="A video made by changereel for a sample coffee roastery: for each of five changes the page scrolls to the place, the camera moves closer, the change happens on the page while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
 </p>
 
-<p align="center"><sub>Two versions of a sample site, compared (<a href="docs/demo">docs/demo</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.7.3/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
+<p align="center"><sub>Two versions of a sample site, compared (<a href="docs/demo">docs/demo</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.8.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
-A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, the page changes from before to after, and a frame is drawn around what is different.
+A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, a frame is drawn around what is different, and the change happens as it would on the page. A new section opens and pushes what is below it down, a link put into a menu makes the others move aside, and a place that changed is wiped over. Each scene shows its one change; other changes on the same page wait for their own scene.
 
 ```console
 changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}"
@@ -53,7 +53,7 @@ A page is compared like a text file whose lines are its rows of pixels. A sectio
 | --- | --- |
 | **Added** | Rows that exist only after the change: a new section, or a whole new page. |
 | **Removed** | Rows that exist only before it. |
-| **Changed** | Rows at the same place on both sides whose pixels differ. The video frames the pixels, not the full width. |
+| **Changed** | Rows at the same place on both sides whose pixels differ. The video frames the pixels, not the full width. Where something was put into a row of things or taken out, such as a link in a menu, the things are aligned too: what only moved aside is not framed. |
 
 Blank rows match anywhere, so bands are judged by their other rows, and more or less white space alone is not reported. A change that is the same on several pages, such as a new link in the header, is one scene that says on how many pages it is.
 
@@ -203,8 +203,9 @@ changereel --before https://example.com --after http://localhost:3000
 | `--narrate` | | Let a model say in one sentence what each change is. |
 | `--model` | `gemma3:4b` | The model that writes the sentences: one in Ollama that reads pictures, or `claude-…` at Anthropic. |
 | `--ollama` | `http://127.0.0.1:11434` | Where Ollama listens (or `OLLAMA_HOST`). |
-| `--voice` | | A Piper voice (`.onnx`) that speaks the sentences. Without it they are captions only. |
+| `--voice` | | A Piper voice (`.onnx`) that speaks the sentences, or a Kokoro voice such as `kokoro:af_heart`. Without it they are captions only. |
 | `--piper` | `piper` | The Piper command (or `CHANGEREEL_PIPER`). |
+| `--kokoro` | `python3` | The Python that Kokoro is installed in (or `CHANGEREEL_KOKORO`). |
 | `--language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. Take a voice of the same language. |
 
 Chrome or Chromium is found in the usual places; `CHROME_PATH` names another. The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
@@ -244,6 +245,15 @@ How good the sentences are depends on the model. On seven changes of a real site
 The local times are from a graphics card with 12 GB. The small local model reads short text well, a changed price or a new label on a button, and is often wrong on a rewritten paragraph. No model is reliable enough to be read without the picture next to it, which is why the sentence is a caption under the page and not a report.
 
 While the voice speaks, the sentence under the page follows it word by word: what is still to come is grey, what was said is white. Piper tells when each word is spoken if the `onnx` package is installed next to it (`pip install piper-tts onnx`); without it the times are guessed from the length of the words. The voice gets the sentence as it is said, a price as "18 euros" and a badge "NEW" as a word, and the caption follows that form; the comment keeps the written one.
+
+**Kokoro** is a second voice, for English only, and more natural than Piper; the demo above speaks with it. It runs on the processor, a sentence in about four seconds, and tells when each word is spoken. The voice and an English model for its pronunciation are fetched on the first run.
+
+```console
+python3 -m venv ~/.local/share/kokoro && ~/.local/share/kokoro/bin/pip install kokoro soundfile
+changereel … --narrate --voice kokoro:af_heart --kokoro ~/.local/share/kokoro/bin/python
+```
+
+Voices starting with `a` speak American English, with `b` British; the [list of voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md) has all of them. The action speaks with Piper.
 
 With `--language de` the sentences and the words in the video are German ("Geändert", "Vorher", "Nachher"); text from the page is quoted as it is. Take a voice that speaks it, such as `de_DE-thorsten-medium`.
 

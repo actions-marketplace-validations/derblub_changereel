@@ -1,9 +1,9 @@
 /**
  * The demo of the README: the two versions of the sample roastery compared and narrated.
  *
- *   ANTHROPIC_API_KEY=… node docs/demo/render.mjs --voice en_US-lessac-medium.onnx [flags]
+ *   ANTHROPIC_API_KEY=… node docs/demo/render.mjs --voice kokoro:af_heart [flags]
  *
- * Writes docs/demo/out. Needs Chrome and, for the voice, Piper.
+ * Writes docs/demo/out. Needs Chrome and, for the voice, Kokoro (or Piper with a .onnx voice).
  */
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";

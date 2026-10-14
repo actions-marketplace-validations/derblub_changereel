@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-14
+
+- The change happens as it would on the page. A section that came opens at its place and pushes what is below it down, or the page above it up when the page before could not be scrolled that far; a section that went folds shut. A link put into a menu makes the links beside it move aside and comes out from behind them. A place that changed is wiped over from left to right. Another page pushes the one before out of the recording sideways.
+- Each scene shows its one change: the page before, then the page before with this change. Other changes on the same page wait for their own scene.
+- Something put into a row of things or taken out, such as a link in a menu, is found by aligning the things of the row: the links that only moved aside are no longer framed with it.
+- Kokoro as a second voice, for English: `--voice kokoro:af_heart`, with `--kokoro` naming its Python. It speaks all sentences in one run and tells when each word is spoken.
+
 ## [0.7.3] - 2026-10-14
 
 - The voice gets a sentence as it is said: "€18" as "18 euros", "250 g" as "250 grams", a quoted "NEW" as a word, a middle dot as a pause. The caption follows that form; the comment keeps the written sentence.
@@ -93,7 +100,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/derblub/changereel/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/derblub/changereel/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/derblub/changereel/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/derblub/changereel/compare/v0.7.0...v0.7.1

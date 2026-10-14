@@ -18,7 +18,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
-import { narrate } from "./narrate.mjs";
+import { kokoroVoice, narrate } from "./narrate.mjs";
 import { collectRoutes, slug } from "./routes.mjs";
 import { TEXTS, textsFor } from "./texts.mjs";
 import { serveVersions } from "./versions.mjs";
@@ -79,6 +79,8 @@ export function parseArgs(argv) {
     voice: opt("voice"),
     language: TEXTS[opt("language")] ? opt("language") : "en",
     piper: opt("piper") || process.env.CHANGEREEL_PIPER || "piper",
+    // The Python Kokoro is installed in, for a voice "kokoro:af_heart"
+    kokoro: opt("kokoro") || process.env.CHANGEREEL_KOKORO || "python3",
   };
 }
 
@@ -213,6 +215,9 @@ export async function compare(options, log = console.log) {
                 span: change.span && { ...change.span, x: change.span.x + is.x },
               ...(change.boxBefore ? { boxBefore: { ...change.boxBefore, x: change.boxBefore.x + was.x } } : {}),
               ...(change.spanBefore ? { spanBefore: { ...change.spanBefore, x: change.spanBefore.x + was.x } } : {}),
+              ...(change.slide
+                ? { slide: { ground: change.slide.ground, moves: change.slide.moves.map((move) => ({ ...move, x: move.x + was.x, dx: move.dx + is.x - was.x })) } }
+                : {}),
                 view,
               });
             }
@@ -285,6 +290,8 @@ export function joinNear(changes, gap = 96) {
       span: bothBoxed ? undefined : spanUnion(asSpan(last.box, last.span), asSpan(change.box, change.span)),
       spanBefore: bothBoxed ? undefined : spanUnion(asSpan(last.boxBefore, last.spanBefore), asSpan(change.boxBefore, change.spanBefore)) ?? undefined,
       blank: bothBoxed && last.blank === change.blank ? last.blank : undefined,
+      // Two edits of a row are not one slide
+      slide: undefined,
       joined: (last.joined ?? 1) + 1,
       order: Math.min(last.order, changes.indexOf(change)),
     });
@@ -447,6 +454,10 @@ async function main() {
     return;
   }
   const options = parseArgs(argv);
+  // Before the long part: Kokoro times words in English only, and speaks no German
+  if (kokoroVoice(options.voice) && (options.language !== "en" || !/^[ab]/.test(kokoroVoice(options.voice)))) {
+    throw new Error(`Kokoro speaks the sentences in English only: take an American (a…) or British (b…) voice, or a Piper voice for --language ${options.language}`);
+  }
   let versions;
   if (options.base) {
     // CHANGEREEL_CWD: the repository to take the versions from, when it is not where this runs

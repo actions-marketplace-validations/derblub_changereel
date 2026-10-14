@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { PNG } from "pngjs";
 import { parseArgs } from "../src/cli.mjs";
-import { cut, describe as describeScene, estimateWords, excerpts, pythonOf, spoken, isEmpty, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
+import { cut, describe as describeScene, estimateWords, excerpts, pythonOf, spoken, isEmpty, kokoroVoice, narrate, plain, question, tidy, wavSeconds } from "../src/narrate.mjs";
 
 /** A scene on a page of 400 by 2000 pixels with both pictures on disk. */
 function sample(change = {}) {
@@ -203,5 +203,15 @@ describe("narrate", () => {
     assert.equal(off.narrate, false);
     const on = parseArgs(["--before", "http://a.test", "--after", "http://b.test", "--narrate", "--model", "x", "--voice", "v.onnx"]);
     assert.deepEqual([on.narrate, on.model, on.voice], [true, "x", "v.onnx"]);
+  });
+
+  test("a voice named kokoro:… is spoken by Kokoro, any other by Piper", () => {
+    assert.equal(kokoroVoice("kokoro:af_heart"), "af_heart");
+    assert.equal(kokoroVoice("kokoro:bm_george"), "bm_george");
+    assert.equal(kokoroVoice("en_US-lessac-medium.onnx"), null);
+    assert.equal(kokoroVoice("kokoro:"), null);
+    assert.equal(kokoroVoice(undefined), null);
+    const options = parseArgs(["--before", "http://a.test", "--after", "http://b.test", "--voice", "kokoro:af_heart", "--kokoro", "/opt/kokoro/bin/python"]);
+    assert.equal(options.kokoro, "/opt/kokoro/bin/python");
   });
 });

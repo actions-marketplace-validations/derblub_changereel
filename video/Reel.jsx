@@ -4,8 +4,9 @@
  * The scenes are made like one screen recording of the page, with nothing of a browser
  * around it and no pointer on it: rounded corners and a soft shadow. The page is scrolled
  * to the place and the camera goes to the change on a spring. There the page before stands
- * still with the place marked, then changes to the page after, and the mark moves and grows
- * into the place there. A sign in the corner says which side it is. The recording stays through
+ * still with the place marked, then the change happens as it would on the page (a section
+ * opens, things in a row move aside, a changed place is wiped over), and the mark moves and
+ * grows into the place there. Each scene shows its one change only. A sign in the corner says which side it is. The recording stays through
  * all scenes. Above it a line says which scene this is, under it the sentence runs as the
  * subtitle.
  *
@@ -155,6 +156,123 @@ const Title = ({ title, summary, facts }) => {
   );
 };
 
+/** How long the things of a row take to make room, or to close up. */
+const SLIDE = 20;
+
+/**
+ * Something put into a row of things, or taken out, as it happened: the things beside it
+ * move aside and the new one comes up in the gap, or it fades and they close up. Drawn over
+ * the page before, in the rows of the change only; `p` runs from 0 to 1.
+ */
+const Slide = ({ scene, at, scale, p }) => {
+  const { slide, beforeY, beforeH, afterY } = scene;
+  const added = scene.blank === "before";
+  // The new thing where it ends up, or the one that goes where it was
+  const thing = added ? scene.box : scene.boxBefore;
+  const ends = [thing.x, thing.x + thing.width];
+  for (const move of slide.moves) ends.push(move.x, move.x + move.dx, move.x + move.width, move.x + move.width + move.dx);
+  const left = Math.min(...ends);
+  const right = Math.max(...ends);
+  // The thing shows only as far as the things beside it have made room, or still leave
+  let from = thing.x;
+  let to = thing.x + thing.width;
+  for (const move of slide.moves) {
+    const now = move.x + move.dx * p;
+    // Which side of the thing it is on, measured on the side the thing is drawn on
+    const beside = added ? move.x + move.dx : move.x;
+    if (beside < thing.x) from = Math.max(from, now + move.width);
+    else to = Math.min(to, now);
+  }
+  // A piece of a page: the rows of the change, from `x` and `width` wide
+  const piece = (which, x, width, y, style) => (
+    <div style={{ position: "absolute", top: 0, left: (x - left) * scale, width: width * scale, height: beforeH * scale, overflow: "hidden", ...style }}>
+      <Img src={staticFile(scene[which])} style={{ position: "absolute", left: -x * scale, top: -y * scale, width: WINDOW_W }} />
+    </div>
+  );
+  const shown = added ? interpolate(p, [0.1, 0.7], [0, 1], clamp) : interpolate(p, [0.3, 0.9], [1, 0], clamp);
+  const cut = `inset(0 ${Math.max(0, thing.x + thing.width - to) * scale}px 0 ${Math.max(0, from - thing.x) * scale}px)`;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: left * scale,
+        top: (beforeY - at) * scale,
+        width: (right - left) * scale,
+        height: beforeH * scale,
+        overflow: "hidden",
+        background: slide.ground,
+      }}
+    >
+      {piece(added ? "after" : "before", thing.x, thing.width, added ? afterY : beforeY, { opacity: shown, clipPath: cut })}
+      {slide.moves.map((move) => piece("before", move.x, move.width, beforeY, { transform: `translateX(${move.dx * p * scale}px)` }))}
+    </div>
+  );
+};
+
+/**
+ * A section that came or went, as it happened: on the page before the section opens at its
+ * place and pushes what is below it down, or folds shut and lets what is below come up.
+ * Where the page before could not be scrolled as far as the page after is shown, it pushes
+ * what is above it up by `lift` as it opens, so that the view needs no scroll after it.
+ */
+const Grow = ({ scene, at, scale, p, lift }) => {
+  const added = scene.type === "added";
+  const up = lift * p * scale;
+  const top = (scene.beforeY - at) * scale - up;
+  const open = (added ? scene.afterH * p : scene.beforeH * (1 - p)) * scale;
+  // The page under the section: from the page after when it came, which is long enough to
+  // fill the view while the page moves up
+  const below = added ? scene.afterY + scene.afterH : scene.beforeY + scene.beforeH;
+  const strip = (which, y, style) => (
+    <div style={{ position: "absolute", left: 0, width: WINDOW_W, overflow: "hidden", ...style }}>
+      <Img src={staticFile(scene[which])} style={{ position: "absolute", left: 0, top: -y * scale, width: WINDOW_W }} />
+    </div>
+  );
+  return (
+    <>
+      {up > 0 && strip("before", at + lift * p, { top: 0, height: Math.max(0, top) })}
+      {strip(added ? "after" : "before", added ? scene.afterY : scene.beforeY, { top, height: open })}
+      {strip(added ? "after" : "before", below, { top: top + open, height: VIEW_H * scale })}
+    </>
+  );
+};
+
+/** A place that changed, as a wipe: the page after is drawn over the place from left to right. */
+const Wipe = ({ rect, windowH, p, children }) => {
+  const front = rect.left + rect.width * p;
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          clipPath: `inset(${Math.max(0, rect.top)}px ${Math.max(0, WINDOW_W - front)}px ${Math.max(0, windowH - rect.top - rect.height)}px ${Math.max(0, rect.left)}px)`,
+        }}
+      >
+        {children}
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: front - 1,
+          top: rect.top,
+          width: 2,
+          height: rect.height,
+          background: WHITE,
+          boxShadow: "0 0 14px rgba(255,255,255,0.7)",
+          opacity: interpolate(p, [0, 0.08, 0.92, 1], [0, 0.9, 0.9, 0], clamp),
+        }}
+      />
+    </>
+  );
+};
+
+/** How long another page takes to push the one before out of the recording. */
+const PUSH = 18;
+
+/** How long each way of changing takes. */
+const MOVES = { slide: SLIDE, grow: 24, wipe: 24 };
+
 const Scene = ({ scene, index, count, texts, previous }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -174,9 +292,26 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   const depart = 46;
   const marked = depart + 34;
   const change = both ? marked + 44 : marked;
-  const after = !hasBefore ? 1 : !hasAfter ? 0 : interpolate(frame, [change, change + 6], [0, 1], clamp);
-  const side = after >= 0.5 ? "after" : "before";
+  // The change happens as it would on the page: something put into a row moves the things
+  // beside it, a section opens or folds shut, and a place that changed is wiped over. What
+  // is there then is the page before with this one change, and it stays: the page after
+  // may hold other changes as well, and they have scenes of their own
+  const motion = !both || scene.page ? null : scene.slide ? "slide" : scene.type === "changed" ? "wipe" : "grow";
+  const moved = motion
+    ? interpolate(frame, [change, change + MOVES[motion]], [0, 1], { ...clamp, easing: motion === "wipe" ? Easing.inOut(Easing.cubic) : reveal })
+    : null;
+  const after = !hasBefore ? 1 : !hasAfter || motion ? 0 : interpolate(frame, [change, change + 6], [0, 1], clamp);
+  const side = (motion ? frame >= change : after >= 0.5) ? "after" : "before";
   const lead = leadFor(side);
+  // A section that came at the end of what the page before could show pushes the page up
+  // as it opens, so that it ends up where it stands in the view after. What changed above it
+  // on the same page put it a little lower there
+  const grows = motion === "grow" && scene.type === "added";
+  const lift = grows ? Math.max(0, tops.after - tops.before - (scene.afterY - scene.beforeY)) : 0;
+  // Where the page after is laid over the page before: its band on the band before
+  const afterTop = !motion ? tops.after : grows ? tops.after : tops.before + (scene.afterY - scene.beforeY);
+  // How far the place after is from where it is in its own view, in the window
+  const behind = (tops.after - afterTop) * scale;
 
   // The camera goes to a small change on a spring, and comes back before the scene ends
   const settle = { damping: 200, mass: 1, stiffness: 90 };
@@ -190,9 +325,9 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   // is now. Around it the page is dimmed a little, so the eye goes to the place at once.
   // A whole page that came or went needs no mark: it would only line the window
   const shown = scene.page ? 0 : interpolate(frame, [marked, marked + 12], [0, 1], clamp) - interpolate(frame, [length - 40, length - 24], [0, 1], clamp);
-  const morph = both ? interpolate(frame, [change, change + 14], [0, 1], { ...clamp, easing: reveal }) : hasAfter ? 1 : 0;
+  const morph = moved ?? (both ? interpolate(frame, [change, change + 14], [0, 1], { ...clamp, easing: reveal }) : hasAfter ? 1 : 0);
   const mix = (name) => rects.before[name] + (rects.after[name] - rects.before[name]) * morph;
-  const mark = { left: mix("left"), top: mix("top") + lead * scale, width: mix("width"), height: mix("height") };
+  const mark = { left: mix("left"), top: mix("top") + lead * scale + behind * morph, width: mix("width"), height: mix("height") };
   const looks = {
     was: empty.before ? 0 : 1 - morph,
     slot: (empty.before ? 1 - morph : 0) + (empty.after ? morph : 0),
@@ -200,6 +335,20 @@ const Scene = ({ scene, index, count, texts, previous }) => {
   };
   // What is new lights up for a moment as it comes
   const flash = empty.after ? 0 : interpolate(frame, [change, change + 8, change + 36], [0, 0.26, 0], clamp);
+
+  // The place a wipe runs over: what it was and what it is, together, where the page after
+  // stands while it runs
+  const was = rects.before;
+  const now = { ...rects.after, top: rects.after.top + behind };
+  const wiped = {
+    left: Math.min(was.left, now.left),
+    top: Math.min(was.top, now.top),
+    width: Math.max(was.left + was.width, now.left + now.width) - Math.min(was.left, now.left),
+    height: Math.max(was.top + was.height, now.top + now.height) - Math.min(was.top, now.top),
+  };
+  // To another page the recording moves on sideways; on the same page it stays
+  const away = Boolean(previous && previous.route !== scene.route);
+  const pushed = interpolate(frame, [0, PUSH], [0, 1], { ...clamp, easing: Easing.inOut(Easing.cubic) });
 
   const page = (which, at) => (
     <Img src={staticFile(scene[which])} style={{ position: "absolute", left: 0, top: -at * scale, width: WINDOW_W }} />
@@ -247,18 +396,44 @@ const Scene = ({ scene, index, count, texts, previous }) => {
               transform: `translate(${close.x * near}px, ${close.y * near}px) scale(${zoom})`,
             }}
           >
-            {/* The page of the scene before stays for a moment: a page takes a moment to load */}
-            {previous && frame < 8 && (
+            {/* The page of the scene before stays for a moment: a page takes a moment to load.
+                Another page comes in from the side and pushes it out */}
+            {previous && frame < (away ? PUSH : 8) && (
               <Img
                 src={staticFile(previous[previous.type === "removed" ? "before" : "after"])}
-                style={{ position: "absolute", left: 0, top: -plan(previous).tops[previous.type === "removed" ? "before" : "after"] * scale, width: WINDOW_W }}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: -plan(previous).tops[previous.type === "removed" ? "before" : "after"] * scale,
+                  width: WINDOW_W,
+                  transform: `translateX(${-pushed * WINDOW_W}px)`,
+                }}
               />
             )}
-            <div style={{ position: "absolute", inset: 0, opacity: previous ? interpolate(frame, [3, 8], [0, 1], clamp) : 1 }}>
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: previous && !away ? interpolate(frame, [3, 8], [0, 1], clamp) : 1,
+                transform: away ? `translateX(${(1 - pushed) * WINDOW_W}px)` : undefined,
+                background: away ? INK_DEEP : undefined,
+              }}
+            >
               {hasBefore && page("before", tops.before - leadFor("before"))}
+              {motion === "slide" && frame >= change && (
+                <Slide scene={scene} at={tops.before - leadFor("before")} scale={scale} p={moved} />
+              )}
+              {motion === "grow" && frame >= change && (
+                <Grow scene={scene} at={tops.before - leadFor("before")} scale={scale} p={moved} lift={lift} />
+              )}
+              {motion === "wipe" && frame >= change && (
+                <Wipe rect={wiped} windowH={windowH} p={moved}>
+                  {page("after", afterTop - leadFor("after"))}
+                </Wipe>
+              )}
               {hasAfter && (
                 <div style={{ position: "absolute", inset: 0, opacity: after }}>
-                  {page("after", tops.after - leadFor("after"))}
+                  {page("after", afterTop - leadFor("after"))}
                 </div>
               )}
             </div>

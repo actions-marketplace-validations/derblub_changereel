@@ -36,7 +36,39 @@ const RED = 0xcc0000ff;
 const BLUE = 0x0000ccff;
 const GREEN = 0x00aa00ff;
 
+/**
+ * A white page of 100 pixels width with one row of things: each is [x, width, colour], and
+ * dark in its lower half, as a word has more than one colour from top to bottom.
+ */
+function row(...things) {
+  const png = new PNG({ width: 100, height: 50 });
+  png.data.fill(255);
+  for (const [from, width, colour] of things) {
+    for (let y = 20; y < 30; y++) for (let x = from; x < from + width; x++) png.data.writeUInt32BE(y < 25 ? colour : 0x222222ff, (y * 100 + x) * 4);
+  }
+  return PNG.sync.write(png);
+}
+
 describe("diff", () => {
+  test("a link put into a menu is framed alone, and before, the gap it went into", () => {
+    // Aligned to the right: the link on the left makes room by moving left
+    const was = row([56, 10, RED], [78, 12, BLUE]);
+    const is = row([32, 10, RED], [54, 12, GREEN], [78, 12, BLUE]);
+    const { changes } = diffPages(was, is);
+    assert.equal(changes.length, 1);
+    const [change] = changes;
+    assert.equal(change.blank, "before");
+    assert.deepEqual([change.box.x, change.box.width], [54, 12]);
+    assert.deepEqual([change.boxBefore.x, change.boxBefore.width], [66, 12]);
+    // For the video: the link on the left moved by 24 pixels, and the ground is white
+    assert.deepEqual(change.slide, { moves: [{ x: 56, width: 10, dx: -24 }], ground: "#ffffff" });
+    // And the other way round: a link taken out
+    const [gone] = diffPages(is, was).changes;
+    assert.equal(gone.blank, "after");
+    assert.deepEqual([gone.boxBefore.x, gone.boxBefore.width], [54, 12]);
+    assert.deepEqual([gone.box.x, gone.box.width], [66, 12]);
+  });
+
   test("identical pages have no changes", () => {
     const a = page([20], [30, RED], [20]);
     assert.deepEqual(diffPages(a, a).changes, []);

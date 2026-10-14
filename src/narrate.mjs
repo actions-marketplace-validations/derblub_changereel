@@ -5,7 +5,7 @@
  * in one sentence what is different. By default it runs in Ollama, so no screenshot leaves
  * the machine. A model named claude-… is asked at Anthropic instead: better sentences, and
  * the only way where there is no local model, such as on a build server; the excerpts of the
- * page are sent there. Piper then speaks the sentence into a WAV file, and the scene lasts
+ * page are sent there. Piper or Kokoro then speaks the sentence into a WAV file, and the scene lasts
  * as long as the voice.
  *
  * Neither is needed for the video. Without a voice the sentence is a caption only, and when
@@ -352,6 +352,21 @@ export async function speak(text, file, { voice, piper }) {
   return { seconds, words: estimateWords(text, seconds) };
 }
 
+/** The Kokoro voice in "kokoro:af_heart", or null for a Piper voice. */
+export function kokoroVoice(voice) {
+  const match = /^kokoro:([a-z]{2}_[a-z]+)$/.exec(voice || "");
+  return match ? match[1] : null;
+}
+
+/**
+ * Speak all sentences with Kokoro, in one run: loading it takes longer than a sentence.
+ * Gives back, for each, how long it plays and when each word is spoken.
+ */
+export async function speakKokoro(items, { voice, kokoro }) {
+  const told = JSON.parse(await run(kokoro, [join(HERE, "speak_kokoro.py"), "--voice", kokoroVoice(voice)], JSON.stringify(items)));
+  return told.map((said, index) => ({ seconds: said.seconds, words: said.words.length ? said.words : estimateWords(items[index].text, said.seconds) }));
+}
+
 /**
  * Give every scene its sentence (`text`) and, with a voice, its sound (`audio`, `seconds`)
  * and the time of each word (`words`).
@@ -360,6 +375,7 @@ export async function speak(text, file, { voice, piper }) {
  */
 export async function narrate(scenes, out, options, log = console.log) {
   if (options.voice) mkdirSync(join(out, "audio"), { recursive: true });
+  const kokoro = kokoroVoice(options.voice);
   let asked = true;
   for (const [index, scene] of scenes.entries()) {
     scene.text = plain(scene, options.language);
@@ -374,13 +390,16 @@ export async function narrate(scenes, out, options, log = console.log) {
         if (err.cause?.code === "ECONNREFUSED" || err.status === 401 || /apiKey|authentication/i.test(err.message)) asked = false;
       }
     }
-    if (options.voice) {
-      scene.audio = `audio/${index + 1}.wav`;
-      const said = await speak(spoken(scene.text), join(out, scene.audio), options);
-      scene.seconds = said.seconds;
-      scene.words = said.words;
-    }
+    if (options.voice) scene.audio = `audio/${index + 1}.wav`;
+    if (options.voice && !kokoro) Object.assign(scene, await speak(spoken(scene.text), join(out, scene.audio), options));
     log(`${index + 1}  ${scene.text}`);
+  }
+  if (kokoro && scenes.length) {
+    const told = await speakKokoro(
+      scenes.map((scene) => ({ text: spoken(scene.text), output: join(out, scene.audio) })),
+      options,
+    );
+    told.forEach((said, index) => Object.assign(scenes[index], said));
   }
   return scenes;
 }

@@ -211,6 +211,94 @@ export function snapBox(png, band, box, { gap = 10, reach = 240 } = {}) {
   return { ...box, x: left, y: top - band.afterY, width: right - left + 1, height: bottom - top + 1 };
 }
 
+/**
+ * What was put into a row of things, or taken out of it. A link that is new in a menu moves
+ * the links beside it, and every pixel of those differs. So the band is cut into its things,
+ * runs of drawn columns apart by at least `space` empty ones, and the things are aligned like
+ * lines of text: two are the same when they are as wide and look alike, also when a shift
+ * by a fraction of a pixel smoothed their edges another way. Gives back where the new thing
+ * is on the side that has it and the gap it went into on the other, or null when things
+ * were changed, not only added or only removed.
+ */
+export function columnEdit(before, after, band, { space = 8 } = {}) {
+  const height = band.beforeH;
+  if (!height || height !== band.afterH) return null;
+  const things = (png, y) => {
+    const found = [];
+    let empty = space;
+    for (let x = 0; x < png.width; x++) {
+      const first = png.data.readUInt32LE((y * png.width + x) * 4);
+      let flat = true;
+      for (let row = y + 1; row < y + height && flat; row++) flat = png.data.readUInt32LE((row * png.width + x) * 4) === first;
+      if (flat) {
+        empty++;
+        continue;
+      }
+      if (empty >= space || !found.length) found.push({ x, width: 1, png, y });
+      else found.at(-1).width = x - found.at(-1).x + 1;
+      empty = 0;
+    }
+    return found;
+  };
+  const cut = ({ png, x, y }, width) => {
+    const out = Buffer.alloc(width * height * 4);
+    for (let row = 0; row < height; row++) png.data.copy(out, row * width * 4, ((y + row) * png.width + x) * 4, ((y + row) * png.width + x + width) * 4);
+    return out;
+  };
+  // Laid one over the other, a pixel to either side as well: where a thing landed between
+  // two pixels, its edges are spread over one more
+  const alike = (one, two) => {
+    if (Math.abs(one.width - two.width) > 2) return false;
+    const width = Math.min(one.width, two.width) - 1;
+    const first = cut(one, width);
+    return [-1, 0, 1].some((shift) => {
+      const x = two.x + shift;
+      if (x < 0 || x + width > two.png.width) return false;
+      return pixelmatch(first, cut({ ...two, x }, width), null, width, height, { threshold: 0.2 }) <= width * height * 0.03;
+    });
+  };
+  const was = things(before, band.beforeY);
+  const now = things(after, band.afterY);
+  let b = 0;
+  let a = 0;
+  const added = [];
+  const removed = [];
+  // The things that are on both sides and moved: from where (before), and by how much
+  const moves = [];
+  for (const part of diffArrays(was, now, { comparator: alike })) {
+    const count = part.value.length;
+    if (!part.added && !part.removed) {
+      for (let i = 0; i < count; i++) {
+        const dx = now[a + i].x - was[b + i].x;
+        if (dx) moves.push({ x: was[b + i].x, width: was[b + i].width, dx });
+      }
+    }
+    // Each with the gap on the other side it went into or came out of
+    const gap = (other, at, png) => ({ x: other[at - 1] ? other[at - 1].x + other[at - 1].width : 0, to: other[at] ? other[at].x : png.width });
+    if (part.added) added.push({ first: now[a], last: now[a + count - 1], gap: gap(was, b, before) });
+    else if (part.removed) removed.push({ first: was[b], last: was[b + count - 1], gap: gap(now, a, after) });
+    if (!part.removed) a += count;
+    if (!part.added) b += count;
+  }
+  if (added.length === removed.length || (added.length && removed.length)) return null;
+  const found = added.length ? added : removed;
+  const left = found[0].first.x;
+  const right = found.at(-1).last.x + found.at(-1).last.width;
+  const from = found[0].gap.x;
+  const to = found.at(-1).gap.to;
+  // The colour of the ground before, to fill what the things leave as they move: in the gap
+  // a new thing goes into, or beside a thing that goes
+  const column = added.length ? Math.floor((from + to) / 2) : left >= 4 ? left - 4 : Math.min(before.width - 1, right + 3);
+  const at = (band.beforeY * before.width + column) * 4;
+  const ground = `#${before.data.subarray(at, at + 3).toString("hex")}`;
+  return {
+    blank: added.length ? "before" : "after",
+    box: { x: left, width: right - left },
+    gap: { x: from, width: Math.max(1, to - from) },
+    slide: { moves, ground },
+  };
+}
+
 /** Whether a rectangle of a picture is one flat colour: nothing is drawn there. */
 export function isFlat(png, x, y, width, height) {
   const right = Math.min(png.width, x + width);
@@ -263,6 +351,7 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
   }
   const bands = mergeRuns(alignRows(rowHashes(before), rowHashes(after)), gap);
   const changes = [];
+  let edit;
   for (const band of bands) {
     const was = trimBlank(before, band.beforeY, band.beforeH);
     const is = trimBlank(after, band.afterY, band.afterH);
@@ -285,6 +374,21 @@ export function diffPages(beforeBuffer, afterBuffer, { gap = 24, minHeight = 2, 
           box: null,
           span: drawnSpan(after, band.afterY, band.afterH),
           spanBefore: drawnSpan(before, band.beforeY, band.beforeH),
+        });
+      } else if (snap && (edit = columnEdit(before, after, band))) {
+        // Something put into a row of things, or taken out: the frame goes round it alone,
+        // and on the side without it round the gap it went into
+        const drawnOn = edit.blank === "before" ? { png: after, band } : { png: before, band: { afterY: band.beforeY, afterH: band.beforeH } };
+        const drawn = snapBox(drawnOn.png, drawnOn.band, { ...box, x: edit.box.x, width: edit.box.width });
+        const gap = { ...drawn, x: edit.gap.x, width: edit.gap.width };
+        changes.push({
+          ...band,
+          type: "changed",
+          box: edit.blank === "before" ? drawn : gap,
+          boxBefore: edit.blank === "before" ? gap : drawn,
+          blank: edit.blank,
+          // For the video: the things beside it make room, or close up
+          slide: edit.slide,
         });
       } else {
         // The same place on both sides, each widened on its own picture: a button that got
