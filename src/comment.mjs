@@ -99,7 +99,7 @@ export async function dropPreviews({ token, repo, number, fetch: request = fetch
   const call = async (method, url, body) => {
     const response = await request(`${api}${url}`, { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
     if (!response.ok && !(method === "GET" && response.status === 404)) throw new Error(`GitHub answered ${response.status} to ${method} ${url}`);
-    return response.ok ? response.json() : null;
+    return response.ok && response.status !== 204 ? response.json() : null;
   };
   const ref = await call("GET", `/git/ref/heads/${BRANCH}`);
   if (!ref) return 0;
@@ -107,6 +107,11 @@ export async function dropPreviews({ token, repo, number, fetch: request = fetch
   const { tree } = await call("GET", `/git/trees/${parent.tree.sha}?recursive=1`);
   const gone = tree.filter((entry) => entry.type === "blob" && entry.path.startsWith(`pr-${number}/`));
   if (!gone.length) return 0;
+  // Without any preview left the branch goes as well: GitHub makes no empty tree
+  if (gone.length === tree.filter((entry) => entry.type === "blob").length) {
+    await call("DELETE", `/git/refs/heads/${BRANCH}`);
+    return gone.length;
+  }
   // A path with no blob takes it out of the tree
   const next = await call("POST", "/git/trees", {
     base_tree: parent.tree.sha,

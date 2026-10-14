@@ -115,4 +115,18 @@ describe("comment", () => {
     const fetch = async () => ({ ok: false, status: 404, json: async () => ({}) });
     assert.equal(await dropPreviews({ token: "t", repo: "o/r", number: 7, fetch }), 0);
   });
+
+  test("when the last preview goes, the branch goes with it", async () => {
+    const sent = [];
+    const fetch = async (url, init = {}) => {
+      const method = init.method || "GET";
+      sent.push(`${method} ${url.replace("https://api.github.com/repos/o/r", "")}`);
+      if (url.includes("/git/ref/heads/")) return { ok: true, json: async () => ({ object: { sha: "c1" } }) };
+      if (url.includes("/git/commits/c1")) return { ok: true, json: async () => ({ sha: "c1", tree: { sha: "t1" } }) };
+      if (url.includes("/git/trees/t1")) return { ok: true, json: async () => ({ tree: [{ type: "blob", path: "pr-7/a.gif" }] }) };
+      return { ok: true, status: 204, json: async () => ({}) };
+    };
+    assert.equal(await dropPreviews({ token: "t", repo: "o/r", number: 7, fetch }), 1);
+    assert.equal(sent.at(-1), `DELETE /git/refs/heads/${BRANCH}`);
+  });
 });
