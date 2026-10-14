@@ -344,6 +344,8 @@ export async function narrate(scenes, out, options, log = console.log) {
     if (asked) {
       try {
         scene.text = await describe(scene, out, options);
+        // A sentence of a model, not the one made without it
+        scene.told = true;
       } catch (err) {
         log(`No sentence from ${options.model} for scene ${index + 1}: ${err.message}`);
         // Not running at all, or no key: do not wait for it again on every scene

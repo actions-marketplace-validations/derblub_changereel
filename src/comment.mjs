@@ -33,11 +33,12 @@ export function commentBody({ pages, checked, scenes = [], videoUrl, previewUrl,
   if (!total) {
     lines.push("Every page looks as it did before.");
   } else if (scenes.length) {
-    const told = scenes.some((scene) => scene.text);
+    // Only sentences of a model say more than the columns; the plain one only repeats them
+    const told = scenes.some((scene) => scene.told);
     lines.push(told ? "| | Page | What changed |" : "| | Page | Change |", "| --- | --- | --- |");
     scenes.forEach((scene, index) => {
       const page = `\`${cell(scene.route)}\`${scene.routes > 1 ? ` and ${scene.routes - 1} more` : ""}`;
-      const what = told && scene.text ? cell(scene.text) : `${KIND[scene.type]}${scene.page ? " page" : ""}`;
+      const what = told && scene.told ? cell(scene.text) : `${KIND[scene.type]}${scene.page ? " page" : ""}`;
       lines.push(`| ${index + 1} | ${page} | ${what} |`);
     });
     const shown = scenes.reduce((sum, scene) => sum + (scene.routes || 1), 0);

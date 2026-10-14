@@ -392,8 +392,8 @@ async function main() {
       await narrate(scenes, options.out, options);
     }
     const texts = textsFor(options.language);
-    // A version by its short name: the commit or branch, or the host of a running site
-    const short = (version) => (URL.canParse(version) ? new URL(version).host : version);
+    // A version by its short name: the host of a running site, seven characters of a commit
+    const short = (version) => (URL.canParse(version) ? new URL(version).host : /^[0-9a-f]{40}$/.test(version) ? version.slice(0, 7) : version);
     const props = {
       title: options.title,
       summary: texts.summary(total, changed.length, pages.length),

@@ -24,8 +24,8 @@ describe("comment", () => {
       pages,
       checked: 3,
       scenes: [
-        { route: "/", routes: 1, type: "added", text: "A banner | with a pipe was added." },
-        { route: "/contact", routes: 1, type: "added", page: true, text: "A contact page was added." },
+        { route: "/", routes: 1, type: "added", text: "A banner | with a pipe was added.", told: true },
+        { route: "/contact", routes: 1, type: "added", page: true, text: "A contact page was added.", told: true },
       ],
       videoUrl: "https://example.test/artifact",
       runUrl: "https://example.test/run",
@@ -38,7 +38,10 @@ describe("comment", () => {
     assert.match(body, /\[this run\]\(https:\/\/example\.test\/run\)/);
   });
 
-  test("without sentences it names the kind of change, without a video it has no link", () => {
+  test("without sentences of a model it names the kind of change, without a video it has no link", () => {
+    const plain = commentBody({ pages, checked: 3, scenes: [{ route: "/", routes: 1, type: "added", text: "A part of the page was added on the home page." }] });
+    assert.match(plain, /\| 1 \| `\/` \| Added \|/);
+    assert.doesNotMatch(plain, /A part of the page/);
     const body = commentBody({ pages, checked: 3 });
     assert.match(body, /\| `\/contact` \| Added page \|/);
     assert.doesNotMatch(body, /Watch the video/);

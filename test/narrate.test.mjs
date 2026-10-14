@@ -160,6 +160,7 @@ describe("narrate", () => {
     const fetch = async () => ({ ok: false, status: 404, text: async () => "model not found" });
     await narrate([scene], out, { model: "m", host: "http://localhost:1", fetch }, (line) => lines.push(line));
     assert.equal(scene.text, "A part of the page changed on the home page.");
+    assert.equal(scene.told, undefined);
     assert.equal(scene.audio, undefined);
     assert.match(lines[0], /No sentence from m for scene 1: Ollama answered 404/);
   });
