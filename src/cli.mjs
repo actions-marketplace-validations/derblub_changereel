@@ -13,8 +13,8 @@
  *
  * Exit code 0 also when nothing changed (then there is no video), 2 when it could not run.
  */
-import { appendFileSync, copyFileSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { appendFileSync, copyFileSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { openBrowser } from "./browser.mjs";
 import { diffPages, nearNoise, noiseBoxes, paint } from "./diff.mjs";
@@ -270,13 +270,27 @@ export function toScenes(pages, { perRoute, maxScenes }) {
   return scenes.slice(0, maxScenes);
 }
 
+/**
+ * Remotion compiles JSX only outside node_modules. Installed from npm, the video of this
+ * package is inside node_modules, so its own files are let through as well.
+ */
+export function compileOwn(config) {
+  const own = resolve(HERE, "..");
+  const rules = config.module.rules.map((rule) =>
+    rule.exclude instanceof RegExp && rule.exclude.test("/node_modules/")
+      ? { ...rule, exclude: (path) => rule.exclude.test(path) && !path.startsWith(own + sep) }
+      : rule,
+  );
+  return { ...config, module: { ...config.module, rules } };
+}
+
 async function render(props, out) {
   const { bundle } = await import("@remotion/bundler");
   const { renderMedia, selectComposition } = await import("@remotion/renderer");
   const fonts = join(HERE, "..", "video", "fonts");
   mkdirSync(join(out, "fonts"), { recursive: true });
   for (const file of readdirSync(fonts)) copyFileSync(join(fonts, file), join(out, "fonts", file));
-  const serveUrl = await bundle({ entryPoint: join(HERE, "..", "video", "index.jsx"), publicDir: out });
+  const serveUrl = await bundle({ entryPoint: join(HERE, "..", "video", "index.jsx"), publicDir: out, webpackOverride: compileOwn });
   const browserExecutable = process.env.CHANGEREEL_RENDER_CHROME || undefined;
   const composition = await selectComposition({ serveUrl, id: "Reel", inputProps: props, browserExecutable });
   const outputLocation = join(out, "changereel.mp4");
@@ -308,8 +322,36 @@ export function renderMarkdown(pages, checked) {
   return lines.join("\n") + "\n";
 }
 
+const USAGE = `changereel: what a change did to the pages of a site, as a before and after video
+
+From a repository, with both versions built and served:
+  changereel --base main --build "npm ci && npm run build" --serve "npm run preview -- --port {port}"
+
+Between two sites that are running:
+  changereel --before https://example.com --after http://localhost:3000
+
+Main options:
+  --routes "/ /pricing"   paths to compare (default: from the sitemaps)
+  --ignore ".quote"        CSS selectors of parts to leave out
+  --out out                where screenshots, changes.json and changereel.mp4 go
+  --no-video               only compare
+  --narrate --voice x.onnx a sentence per change, spoken
+  --language de            German sentences and words in the video
+
+All options: https://github.com/derblub/changereel#on-the-command-line`;
+
 async function main() {
-  const options = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h") || !argv.length) {
+    console.log(USAGE);
+    return;
+  }
+  if (argv.includes("--version") || argv.includes("-v")) {
+    const { version } = JSON.parse(readFileSync(join(HERE, "..", "package.json"), "utf8"));
+    console.log(version);
+    return;
+  }
+  const options = parseArgs(argv);
   let versions;
   if (options.base) {
     // CHANGEREEL_CWD: the repository to take the versions from, when it is not where this runs
@@ -368,7 +410,9 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Run when started as a command. Through npm the command is a link to this file, so the
+// path it was started by is followed to the file itself.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().catch((err) => {
     console.error(err.message || err);
     process.exit(2);

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PNG } from "pngjs";
 import { openBrowser } from "../src/browser.mjs";
 import { execFileSync } from "node:child_process";
-import { cpSync, writeFileSync } from "node:fs";
+import { cpSync, symlinkSync, writeFileSync } from "node:fs";
 import { compare, parseArgs, renderMarkdown, toScenes } from "../src/cli.mjs";
 import { serveVersions } from "../src/versions.mjs";
 import { alignRows, diffPages, drawnSpan, mergeRuns, nearNoise, noiseBoxes, paint, trimBlank } from "../src/diff.mjs";
@@ -242,6 +242,17 @@ describe("scenes", () => {
     const pages = [site("/", change("changed", 1), change("changed", 2), change("changed", 3)), site("/b", change("changed", 4))];
     assert.equal(toScenes(pages, { perRoute: 1, maxScenes: 8 }).length, 2);
     assert.equal(toScenes(pages, { perRoute: 3, maxScenes: 2 }).length, 2);
+  });
+});
+
+describe("command", () => {
+  test("runs when started through a link, as npm installs it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "changereel-bin-"));
+    const link = join(dir, "changereel");
+    symlinkSync(join(HERE, "..", "src", "cli.mjs"), link);
+    const version = JSON.parse(readFileSync(join(HERE, "..", "package.json"), "utf8")).version;
+    assert.equal(execFileSync(process.execPath, [link, "--version"], { encoding: "utf8" }).trim(), version);
+    assert.match(execFileSync(process.execPath, [link, "--help"], { encoding: "utf8" }), /--base main/);
   });
 });
 

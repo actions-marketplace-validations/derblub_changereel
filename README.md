@@ -126,6 +126,14 @@ Each version is built in its own git worktree, so two installs and two builds ru
 
 ## On the command line
 
+It needs Node 22 or newer and a Chrome or Chromium. Run it without installing:
+
+```console
+npx changereel --help
+```
+
+Or add it to a project with `npm install --save-dev changereel`.
+
 From a repository, with the versions built and served for you:
 
 ```console
@@ -165,7 +173,7 @@ changereel --before https://example.com --after http://localhost:3000
 | `--piper` | `piper` | The Piper command (or `CHANGEREEL_PIPER`). |
 | `--language` | `en` | Language of the sentences and of the words in the video: `en` or `de`. Take a voice of the same language. |
 
-You need Node 22 or newer and a Chrome or Chromium (`CHROME_PATH` when it is not in a usual place). The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
+Chrome or Chromium is found in the usual places; `CHROME_PATH` names another. The video is rendered with [Remotion](https://www.remotion.dev), which downloads its own browser on the first run. Remotion has its own [licence](https://www.remotion.dev/docs/license): free for individuals and small teams, paid for larger companies.
 
 ## With a voice
 

@@ -1,7 +1,20 @@
 {
   "name": "changereel",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Find what a change did to the pages of a site and show it as a before and after video.",
+  "keywords": [
+    "visual-regression",
+    "screenshot",
+    "diff",
+    "video",
+    "pull-request",
+    "github-action",
+    "remotion",
+    "changelog",
+    "review"
+  ],
+  "homepage": "https://github.com/derblub/changereel#readme",
+  "bugs": "https://github.com/derblub/changereel/issues",
   "type": "module",
   "bin": {
     "changereel": "src/cli.mjs"
@@ -29,5 +42,8 @@
   },
   "author": "Daniel Kurdoghlian, Pushing Pixels (https://pushingpixels.at)",
   "license": "MIT",
-  "repository": "github:derblub/changereel"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/derblub/changereel.git"
+  }
 }

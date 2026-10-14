@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-14
+
+- On npm: `npx changereel`. `--help` and `--version`.
+- Runs when started through the link npm installs, and renders the video from inside node_modules.
+- A release on GitHub publishes the same version to npm, with provenance.
+- The measures and arithmetic of the video are in a module of their own, with tests.
+
 ## [0.5.1] - 2026-10-14
 
 - The page before stands still for a good second once the camera is there, before it changes to the page after. A sign in the corner of the recording says which side it is.
@@ -45,7 +52,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/derblub/changereel/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/derblub/changereel/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/derblub/changereel/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/derblub/changereel/compare/v0.3.0...v0.4.0
