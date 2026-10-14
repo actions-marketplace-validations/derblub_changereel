@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-14
+
 - The voice gets a sentence as it is said: "€18" as "18 euros", "250 g" as "250 grams", a quoted "NEW" as a word, a middle dot as a pause. The caption follows that form; the comment keeps the written sentence.
 - The sign that says which side is shown is a tab on the top edge of the recording, half on the stage, so it covers no footer either. A page that came or went as a whole gets no mark around it.
 - German: the plain sentence in German word order ("Auf der Startseite hat sich ein Teil der Seite geändert."), and "Neue Seite" / "Seite entfernt" for a page.
@@ -91,7 +93,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/derblub/changereel/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/derblub/changereel/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/derblub/changereel/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/derblub/changereel/compare/v0.6.2...v0.7.0
