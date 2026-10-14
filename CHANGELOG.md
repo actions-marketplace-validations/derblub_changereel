@@ -4,9 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-14
+
 - The action comments on the pull request: what changed on which page, the sentence for each change when there is one, and the way to the video. A later run changes the comment instead of adding one; a pull request that changes no page gets none.
 - The action keeps the video as an artifact of the run itself, as the video and not in a zip (inputs `upload`, `artifact-name`; output `video-url`).
 - The comment shows a moving preview of the video, kept on the branch `changereel-previews` (input `preview`; `--preview` renders it as `changereel.gif`).
+- A commit on the opening card is shown by its first seven characters.
 
 ## [0.5.2] - 2026-10-14
 
@@ -56,7 +59,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/derblub/changereel/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/derblub/changereel/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/derblub/changereel/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/derblub/changereel/compare/v0.4.0...v0.5.0
