@@ -106,6 +106,12 @@ changereel --base main --build "npm ci && npm run build" --serve "npm run previe
 
 [docs/demo-states](docs/demo-states) is a sample of this: the roastery of the demo above, with a bag that opens on a click and an account behind a login, and [the states file](docs/demo-states/states.json) that reaches both.
 
+<p align="center">
+  <img src="docs/assets/demo-states.gif" alt="A video made by changereel with --states for the sample coffee roastery: the bag, a dialog that opens on a click, now shows how far the order is from free delivery; the account page, behind a login, now has a next delivery date and a button to pause the subscription" width="820">
+</p>
+
+<p align="center"><sub>The bag behind a click and the account behind a login, compared (<a href="docs/demo-states">docs/demo-states</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.9.0/changereel-demo-states.mp4">The same video with its voice and chapters</a>.</sub></p>
+
 `setup` runs once on each version, before anything is captured, and every page and state is then seen logged in. Each state starts from its `route` and ends with a `waitFor` on what should be in the picture. The route does not have to be among the routes compared. With a states file a site needs no sitemap: then only the states and the `--routes` you name are compared.
 
 A step is one of these. Each takes a `timeoutMs` in milliseconds of its own, from 1 to 120000; the file can set one for all steps at its top (10000 if it does not).
