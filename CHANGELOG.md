@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-22
+
+- States behind a click or a login: `--states` (action input `states`) takes a file of states, each a route and steps (`navigate`, `click`, `fill`, `press`, `waitFor`) that end on what should be in the picture. Targets are found by role and name, label, test id or, when asked, a selector. A `setup` list logs in once per version and keeps the session. Passwords come from the environment through `valueFrom` and are written nowhere. The file is checked before anything runs, with errors that name the step, such as `states[2].steps[1].target`.
+- The steps run on both versions. A state that can be reached on one side only is a change; a state reached on neither ends the run with exit code 2, naming the step and the reason for each side.
+- Each version runs in a browser context of its own, so a cookie of one never reaches the other on the same host.
+- The video has a chapter for each scene, named by its page or state and the kind of change, and one for the summary, so it can be skipped through without sound. It needs an ffmpeg on the PATH; without one the video stays as it is.
+- A random number whose digits came up alike by chance on one side is no longer taken for a change.
+- The count leaves out the side where nothing changed: "2 changes in 2 of 2 states" instead of "on 0 of 2 pages and 2 of 2 states".
+- A second demo in `docs/demo-states`: the sample roastery with a bag behind a click and an account behind a login.
+
 ## [0.8.1] - 2026-10-14
 
 - The action is named "changereel visual diff" in the GitHub Marketplace, where "changereel" is taken by an account. `uses: derblub/changereel@v0` stays as it is.
@@ -104,7 +114,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/derblub/changereel/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/derblub/changereel/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/derblub/changereel/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/derblub/changereel/compare/v0.7.2...v0.7.3
