@@ -1,6 +1,6 @@
 {
   "name": "changereel",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Find what a change did to the pages of a site and show it as a before and after video.",
   "keywords": [
     "visual-regression",
@@ -21,7 +21,8 @@
   },
   "files": [
     "src",
-    "video"
+    "video",
+    "schema"
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs"
@@ -45,5 +46,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/derblub/changereel.git"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
   }
 }
