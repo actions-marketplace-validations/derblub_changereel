@@ -260,13 +260,19 @@ function differences(name, { before, after }, options, page) {
   return found;
 }
 
+/** The path in the file of a step of a state, or of its route for `null`: in the scenario, for a state read from one. */
+function stepPath(state, index, step) {
+  if (state.paths) return step === null ? state.paths.route : state.paths.steps[step];
+  return step === null ? `states[${index}].route` : `states[${index}].steps[${step}]`;
+}
+
 /**
  * Where the steps of a state stopped: the path of the step in the file, what it does and why.
  * A stop before the first step is the load of the route.
  */
 function stopOf(stop, state, index, route) {
   return {
-    path: stop.step === null ? `states[${index}].route` : `states[${index}].steps[${stop.step}]`,
+    path: stepPath(state, index, stop.step),
     does: stop.step === null ? `load ${route}` : describeStep(state.steps[stop.step]),
     reason: stop.reason,
   };
@@ -408,7 +414,7 @@ async function checkSelectors(browser, options) {
   const selectors = [
     ...setup.map((step, i) => [step.target?.css, `setup[${i}].target.css`]),
     ...states.flatMap((state, s) => [
-      ...state.steps.map((step, i) => [step.target?.css, `states[${s}].steps[${i}].target.css`]),
+      ...state.steps.map((step, i) => [step.target?.css, `${stepPath(state, s, i)}.target.css`]),
       ...state.ignore.map((selector, i) => [selector, `states[${s}].ignore[${i}]`]),
     ]),
   ].filter(([selector]) => selector !== undefined);

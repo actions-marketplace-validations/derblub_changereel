@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "name": "Checkout dialog",
+  "description": "Opens the checkout from the cart",
+  "browser": "chromium",
+  "baseUrl": "http://localhost:3000",
+  "viewport": { "width": 1280, "height": 800 },
+  "steps": [
+    { "action": "marker", "title": "The cart" },
+    { "action": "navigate", "path": "/cart", "caption": "Your cart" },
+    { "action": "wait", "ms": 500 },
+    { "action": "assertText", "target": { "role": "heading", "name": "Cart", "exact": true }, "text": "Cart", "match": "exact" },
+    { "action": "fill", "target": { "label": "Voucher" }, "valueFrom": { "env": "CHANGEREEL_USER" }, "zoom": 1.5 },
+    { "action": "press", "key": "Enter", "target": { "label": "Voucher" } },
+    { "action": "click", "target": { "role": "button", "name": "Checkout" }, "caption": "Check out", "zoom": true, "timeoutMs": 4000 },
+    { "action": "assertVisible", "target": { "role": "dialog", "name": "Checkout" }, "timeoutMs": 3000 },
+    { "action": "marker", "title": "Done", "kind": "caption" }
+  ]
+}
