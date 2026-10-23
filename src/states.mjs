@@ -7,6 +7,7 @@
  * so the two cannot drift apart.
  */
 import { readFileSync } from "node:fs";
+import { fromScenario, isScenario, scenarioPath } from "./demoflow.mjs";
 
 export const ACTIONS = ["navigate", "click", "fill", "press", "waitFor"];
 
@@ -84,7 +85,7 @@ export function sameName(a, b) {
 }
 
 /** Edits to turn one word into the other. */
-function distance(a, b) {
+export function distance(a, b) {
   let row = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
     const next = [i];
@@ -440,10 +441,32 @@ export function readStates(file, env = process.env) {
     const { line, column } = whereJson(text, err);
     throw new Error(`${file} is not JSON: line ${line}, column ${column}: ${jsonReason(err)}`);
   }
-  const problems = checkStates(data, env);
-  if (problems.length) {
-    const lines = problems.map(({ path, message }) => `  ${path}: ${message}`);
-    throw new Error(`${file} has ${problems.length} problem${problems.length === 1 ? "" : "s"}:\n${lines.join("\n")}`);
-  }
+  if (isScenario(data)) return readScenario(file, data, env);
+  refuse(file, checkStates(data, env));
   return normalize(data);
+}
+
+function refuse(file, problems) {
+  if (!problems.length) return;
+  const lines = problems.map(({ path, message }) => `  ${path}: ${message}`);
+  throw new Error(`${file} has ${problems.length} problem${problems.length === 1 ? "" : "s"}:\n${lines.join("\n")}`);
+}
+
+/** Where a problem of a scenario comes in the list: by its step, the environment last. */
+function rank({ path, message }) {
+  if (/\.valueFrom\.env$/.test(path) && /is (not set|empty)$/.test(message)) return Infinity;
+  return Number(/^steps\[(\d+)\]/.exec(path)?.[1] ?? -1);
+}
+
+/**
+ * A DemoFlow scenario as a states file of one state. Every problem names its place in the
+ * scenario, and so does the state: `paths` holds where its route and each step came from.
+ */
+function readScenario(file, data, env) {
+  const scenario = fromScenario(data);
+  const later = scenario.file ? checkStates(scenario.file, env).map(({ path, message }) => ({ path: scenarioPath(path, scenario.paths), message })) : [];
+  refuse(file, [...scenario.problems, ...later].sort((a, b) => rank(a) - rank(b) || 0));
+  const read = normalize(scenario.file);
+  read.states[0].paths = scenario.paths;
+  return read;
 }

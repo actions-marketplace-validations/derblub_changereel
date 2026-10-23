@@ -288,6 +288,25 @@ describe("comparing states", { skip: !chrome && "no Chromium" }, () => {
     assert.match(lines[0], /^\? \/flaky › Flaky {2}not compared: after: unstable: stopped on 1 of 2 visits, last at states\[0\]\.steps\[0\] click button "Open"/);
   });
 
+  test("a DemoFlow scenario is one state, and a stop names the step of the scenario", async () => {
+    const file = statesFile({
+      schemaVersion: 1,
+      name: "Billing tab",
+      baseUrl: "http://localhost:3000",
+      steps: [
+        { action: "marker", title: "Settings" },
+        { action: "navigate", path: "/settings", caption: "The settings" },
+        { action: "wait", ms: 200 },
+        { action: "click", target: { role: "tab", name: "Billing", exact: true }, zoom: true, timeoutMs: 500 },
+        { action: "assertVisible", target: { role: "tabpanel", name: "Billing" }, timeoutMs: 500 },
+      ],
+    });
+    const pages = await compare(options(file, "--confirm", "1"), () => {}, []);
+    const state = pages.find((page) => page.state);
+    assert.deepEqual(state.state, { name: "Billing tab", steps: 2 });
+    assert.deepEqual(state.changes.map((change) => change.stopped), [{ side: "after", step: 0, path: "steps[3]", does: 'click tab "Billing"', reason: "not found" }]);
+  });
+
   test("a route that answers 404 on both sides is not compared, and the path is that of the route", async () => {
     const file = statesFile({
       schemaVersion: 1,

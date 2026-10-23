@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+- `--states` also reads a [DemoFlow](https://github.com/AndreyBegma/DemoFlow) scenario, as one state: its `name`, the route of its first `navigate` and the steps after it. `marker` and `wait` steps and `caption` and `zoom` are left out, as they only matter for DemoFlow's video; `assertVisible` and `assertText` become a `waitFor` on the same target. A step changereel cannot do yet (`repeat`, `hover`, `select`, `scroll`, `screenshot`, `waitForReady`, a `text` or `placeholder` target) is an error with its path, never left out. Every path is that of the scenario, such as `steps[3]`.
+
 ## [0.9.0] - 2026-10-22
 
 - States behind a click or a login: `--states` (action input `states`) takes a file of states, each a route and steps (`navigate`, `click`, `fill`, `press`, `waitFor`) that end on what should be in the picture. Targets are found by role and name, label, test id or, when asked, a selector. A `setup` list logs in once per version and keeps the session. Passwords come from the environment through `valueFrom` and are written nowhere. The file is checked before anything runs, with errors that name the step, such as `states[2].steps[1].target`.
