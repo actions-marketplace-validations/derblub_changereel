@@ -9,6 +9,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - `--states` also reads a [DemoFlow](https://github.com/AndreyBegma/DemoFlow) scenario, as one state: its `name`, the route of its first `navigate` and the steps after it. `marker` and `wait` steps and `caption` and `zoom` are left out, as they only matter for DemoFlow's video; `assertVisible` and `assertText` become a `waitFor` on the same target. A step changereel cannot do yet (`repeat`, `hover`, `select`, `scroll`, `screenshot`, `waitForReady`, a `text` or `placeholder` target) is an error with its path, never left out. Every path is that of the scenario, such as `steps[3]`.
 - A sentence from a model named `claude-…` is asked for with version 1.3 of Anthropic's SDK, which speaks version 2026-10-21 of the API. The request and what is read from the answer stay the same.
 - Tested on Node 26 as well as on 22 and 24.
+- zod 4.6.7 instead of 4.5.4, which Remotion and Anthropic's SDK pin: 4.5.4 can run out of memory validating an oversized collection ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)). fast-uri 3.1.9 instead of 3.1.8, past an advisory of its own. `npm audit` finds nothing now.
 
 ## [0.9.0] - 2026-10-22
 
