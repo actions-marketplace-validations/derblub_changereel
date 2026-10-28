@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-28
+
 - `--states` also reads a [DemoFlow](https://github.com/AndreyBegma/DemoFlow) scenario, as one state: its `name`, the route of its first `navigate` and the steps after it. `marker` and `wait` steps and `caption` and `zoom` are left out, as they only matter for DemoFlow's video; `assertVisible` and `assertText` become a `waitFor` on the same target. A step changereel cannot do yet (`repeat`, `hover`, `select`, `scroll`, `screenshot`, `waitForReady`, a `text` or `placeholder` target) is an error with its path, never left out. Every path is that of the scenario, such as `steps[3]`.
+- A sentence from a model named `claude-…` is asked for with version 1.3 of Anthropic's SDK, which speaks version 2026-10-21 of the API. The request and what is read from the answer stay the same.
+- Tested on Node 26 as well as on 22 and 24.
 
 ## [0.9.0] - 2026-10-22
 
@@ -116,7 +120,8 @@ All notable changes to this project are documented here. The format follows [Kee
 - Leaves out what is not stable: waits until a page has settled, visits it more than once, does not draw frames, compares an app shell and its content apart, and takes `--ignore` selectors.
 - GitHub Action with a job summary and the video as an output.
 
-[Unreleased]: https://github.com/derblub/changereel/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/derblub/changereel/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/derblub/changereel/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/derblub/changereel/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/derblub/changereel/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/derblub/changereel/compare/v0.7.3...v0.8.0
