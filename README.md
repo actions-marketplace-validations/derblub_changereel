@@ -14,6 +14,8 @@
 
 <p>
   <a href="https://github.com/derblub/changereel/actions/workflows/ci.yml"><img src="https://github.com/derblub/changereel/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/changereel"><img src="https://img.shields.io/npm/v/changereel?cacheSeconds=3600" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/changereel"><img src="https://img.shields.io/node/v/changereel?cacheSeconds=3600" alt="Node versions"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
