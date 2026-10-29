@@ -1,6 +1,6 @@
 {
   "name": "changereel",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Find what a change did to the pages of a site and show it as a before and after video.",
   "keywords": [
     "visual-regression",
@@ -31,15 +31,15 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0",
-    "@remotion/bundler": "4.0.535",
-    "@remotion/renderer": "4.0.535",
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@remotion/bundler": "4.0.539",
+    "@remotion/renderer": "4.0.539",
     "diff": "^9.0.0",
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "remotion": "4.0.535"
+    "remotion": "4.0.539"
   },
   "author": "Daniel Kurdoghlian, Pushing Pixels (https://pushingpixels.at)",
   "license": "MIT",
@@ -49,5 +49,8 @@
   },
   "devDependencies": {
     "ajv": "^8.20.0"
+  },
+  "overrides": {
+    "zod": "^4.6.7"
   }
 }

@@ -14,6 +14,8 @@
 
 <p>
   <a href="https://github.com/derblub/changereel/actions/workflows/ci.yml"><img src="https://github.com/derblub/changereel/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://www.npmjs.com/package/changereel"><img src="https://img.shields.io/npm/v/changereel?cacheSeconds=3600" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/changereel"><img src="https://img.shields.io/node/v/changereel?cacheSeconds=3600" alt="Node versions"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
@@ -36,7 +38,7 @@
   <img src="docs/assets/demo.gif" alt="A video made by changereel for a sample coffee roastery: for each of five changes the page scrolls to the place, the camera moves closer, the change happens on the page while a mark moves from the old place to the new one, and a sentence says what changed" width="820">
 </p>
 
-<p align="center"><sub>Two versions of a sample site, compared (<a href="docs/demo">docs/demo</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.9.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
+<p align="center"><sub>Two versions of a sample site, compared (<a href="docs/demo">docs/demo</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.10.0/changereel-demo.mp4">The same video with its voice</a>.</sub></p>
 
 A pull request says what changed in the code. What changed on the screen, the reviewer has to find by clicking through a preview. **changereel** opens every page of the site before and after the change, works out where the two differ and renders a short video that looks like a screen recording: the page scrolls to the place, the camera moves closer, a frame is drawn around what is different, and the change happens as it would on the page. A new section opens and pushes what is below it down, a link put into a menu makes the others move aside, and a place that changed is wiped over. Each scene shows its one change; other changes on the same page wait for their own scene. The MP4 has a chapter for each scene, named after the page and the kind of change, so a player lists the changes and jumps to each (written with `ffmpeg` when it is on the PATH).
 
@@ -110,7 +112,7 @@ changereel --base main --build "npm ci && npm run build" --serve "npm run previe
   <img src="docs/assets/demo-states.gif" alt="A video made by changereel with --states for the sample coffee roastery: the bag, a dialog that opens on a click, now shows how far the order is from free delivery; the account page, behind a login, now has a next delivery date and a button to pause the subscription" width="820">
 </p>
 
-<p align="center"><sub>The bag behind a click and the account behind a login, compared (<a href="docs/demo-states">docs/demo-states</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.9.0/changereel-demo-states.mp4">The same video with its voice and chapters</a>.</sub></p>
+<p align="center"><sub>The bag behind a click and the account behind a login, compared (<a href="docs/demo-states">docs/demo-states</a>). <a href="https://github.com/derblub/changereel/releases/download/v0.10.0/changereel-demo-states.mp4">The same video with its voice and chapters</a>.</sub></p>
 
 `setup` runs once on each version, before anything is captured, and every page and state is then seen logged in. Each state starts from its `route` and ends with a `waitFor` on what should be in the picture. The route does not have to be among the routes compared. With a states file a site needs no sitemap: then only the states and the `--routes` you name are compared.
 
